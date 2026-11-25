@@ -1,0 +1,11 @@
+# Geography rules for examples/geo-demo.ndjson. The checks they enable are offline:
+# the bundled ZIP database answers every lookup, so no address leaves the machine.
+version: 1
+
+geo:
+  addresses:
+    - path: "$.members[*].home_address"
+      residential: true
+      line1_max: 40
+      household_key: "$.members[*].household_id"
+  employer_address: "$.employer.mailing_address"

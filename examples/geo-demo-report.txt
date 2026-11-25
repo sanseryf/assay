@@ -1,0 +1,43 @@
+Assay · 12 payloads · 2 clean · 10 with errors · 4 ms
+
+ #   IMPACT   LAYER   WHERE                           PROBLEM                                                    RECORDS
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 1   ██████   geo     members[*].home_address.city    city is not associated with this ZIP                             1
+                                                      e.g. Dallas                                                       
+                                                      hint: USPS preferred is 'MCKINNEY'.                               
+ 2   ██████   geo     members[*].home_address.city    city is not associated with this ZIP                             1
+                                                      e.g. Jersey City                                                  
+                                                      hint: USPS preferred is 'HOBOKEN'.                                
+ 3   ██████   geo     members[*].home_address.line1   address line has no street number                                1
+                                                      e.g. Main St                                                      
+                                                      hint: a deliverable US address starts with a primary              
+                                                      number, e.g. 123 Main St.                                         
+ 4   ██████   geo     members[*].home_address.line1   PO box in a residential field                                    1
+                                                      e.g. PO Box 123                                                   
+                                                      hint: a home address must be a physical residence.                
+ 5   ██████   geo     members[*].home_address.state   military ZIP belongs to AA                                       1
+                                                      e.g. TX                                                           
+                                                      hint: APO/FPO/DPO addresses use AA, not TX.                       
+ 6   ██████   geo     members[*].home_address.state   not a two-letter state code                                      1
+                                                      e.g. TEXAS                                                        
+                                                      hint: did you mean 'TX'?                                          
+ 7   ██████   geo     members[*].home_address.state   ZIP is in TX                                                     1
+                                                      e.g. OK                                                           
+                                                      hint: 75071 belongs to TX; check the state mapping or a           
+                                                      swapped field.                                                    
+ 8   ██████   geo     members[*].home_address.zip     four-digit ZIP                                                   1
+                                                      e.g. 7030                                                         
+                                                      hint: likely '07030': a leading zero disappears when a            
+                                                      ZIP is stored as a number.                                        
+ 9   ██       geo     members[*].home_address         household members have different addresses                       1
+                                                      hint: if they live together, one address was probably             
+                                                      copied incompletely.                                              
+10   ██       geo     members[*].home_address         home address equals the employer address                         1
+                                                      hint: the office address may have been mapped into the            
+                                                      home field.                                                       
+11   ██       geo     members[*].home_address.line1   unit appears in line 1                                           1
+                                                      e.g. 123 Main St Apt 4                                            
+                                                      hint: move Apt/Ste/Unit into line 2 for destinations              
+                                                      with separate unit fields.                                        
+
+start here · fixing #1 (members[*].home_address.city) clears 1 of 14 findings (7%).

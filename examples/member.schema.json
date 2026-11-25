@@ -22,7 +22,21 @@
             "type": "string",
             "enum": ["EMPLOYEE", "EMPLOYEE_SPOUSE", "EMPLOYEE_CHILD"]
           },
-          "source_system": { "type": "string" }
+          "source_system": { "type": "string" },
+          "household_id": { "type": "string" },
+          "home_address": {
+            "type": "object",
+            "required": ["line1", "city", "state", "zip"],
+            "properties": {
+              "line1": { "type": "string" },
+              "line2": { "type": "string" },
+              "city": { "type": "string" },
+              "state": { "type": "string" },
+              "zip": { "type": "string" },
+              "county": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
         },
         "additionalProperties": false
       }
