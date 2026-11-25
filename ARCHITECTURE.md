@@ -2,16 +2,19 @@
 
 > A JSON payload error identifier. Assay takes one payload or ten thousand, runs them through layered checks (syntax, schema, setup rules, string quality, and geographic validation), then **groups every error by root cause** so you fix one mapping instead of reading 4,000 identical failures.
 
-> **Implementation status (v0.2).** This document is the target design. **Milestones
-> M1–M4 are built, tested and shipped:** syntax, schema, setup rules, string quality and
-> grouping, with terminal/JSON reports and a 0/1/2/3 exit-code contract. The geographic
-> layers (M5–M6), redaction, the API and web UI, HTML/SARIF output and the Switchyard
-> stage are marked **planned** below. The README describes only what runs today.
+> **Implementation status (v0.3).** This document is the target design. **Milestones
+> M1–M5 are built, tested and shipped:** syntax, schema, setup rules, string quality,
+> offline geography and grouping, with terminal/JSON reports and a 0/1/2/3 exit-code
+> contract. Online address verification (M6), redaction, the API and web UI, HTML/SARIF
+> output and the Switchyard stage are marked **planned** below. The README describes
+> only what runs today.
 
 **Stack today:** Python 3.11+ · jsonschema (Draft 2020-12) · ftfy · PyYAML · Pydantic ·
-Typer (CLI) · Rich (terminal reports) · pytest + Hypothesis · GitHub Actions (ruff → mypy --strict → pytest)
+usaddress · SQLite (bundled ZIP reference) · Typer (CLI) · Rich (terminal reports) ·
+pytest + Hypothesis · GitHub Actions (ruff → mypy --strict → pytest)
 
-**Stack planned:** usaddress and a bundled SQLite ZIP reference (M5) · USPS Addresses API (M6) · FastAPI + web UI (M7) · Docker (M7) · Switchyard integration (M8)
+**Stack planned:** USPS Addresses API (M6) · FastAPI + web UI (M7) · Docker (M7) ·
+Switchyard integration (M8)
 
 ---
 
@@ -179,7 +182,7 @@ Assay walks every string value and checks it for corruption that passes every sc
 
 Findings show the invisible: `"Smith⟨U+200B⟩"` with the codepoint spelled out, because a report that says "bad character" next to text that looks fine is useless.
 
-### Layer 5: Geographic — **planned (M5–M6)**
+### Layer 5: Geographic — **offline built (M5); online planned (M6)**
 
 Downstream systems (insurers, payroll, tax, shipping) routinely reject records whose ZIP, city and state don't agree, or whose "home address" isn't a physical residence. These pass every schema check, because `"75071"`, `"Dallas"` and `"OK"` are each perfectly valid strings. Layer 5 checks that they agree with each other and with reality.
 
@@ -459,8 +462,9 @@ for very large batches, and groups merged across workers by fingerprint.
 | Grouping | N copies of one defect → exactly 1 group with count N; two independent defects → 2 groups | built — `tests/test_grouping.py` |
 | Rules | Bad rule files fail at load; each rule kind fires on crafted data and stays quiet on clean data | built — `tests/test_rules.py`, `tests/test_setup.py` |
 | String layer | One crafted value per corruption, plus clean strings that must stay quiet | built — `tests/test_strings.py` |
+| Geographic (offline) | ZIP/city/state/county triples, military ZIPs, PO boxes, street numbers and batch smells, against a fixture database built from the same builder | built — `tests/test_geo_build.py`, `tests/test_geo_checks.py` |
 | Fuzz | Random bytes never crash Assay; worst case is a syntax finding | built as a Hypothesis property, not a long-running fuzz campaign |
-| Geographic | Known ZIP/city/state triples (including multi-county ZIPs, city aliases, military and territory addresses) → expected findings; USPS calls mocked with recorded responses, so CI never hits the network | planned with M5–M6 |
+| Geographic (online) | USPS calls mocked with recorded responses, so CI never hits the network | planned with M6 |
 
 CI: `ruff` → `mypy --strict` → `pytest` with a coverage gate, on Python 3.11 and 3.12.
 The golden snapshot is part of `pytest`, and the Docker build joins CI with M7.
@@ -475,7 +479,7 @@ The golden snapshot is part of `pytest`, and the Docker build joins CI with M7.
 | M2 | Schema layer | `iter_errors` mapped to findings with hints and did-you-mean | **built and tested** |
 | M3 | Grouping | Fingerprints, ranking, terminal report; 2,000-payload demo collapses to a handful of groups | **built: 2,000 payloads → 10 groups** |
 | M4 | String + setup layers | ftfy, hidden chars, constant/placeholder smells, YAML rules | **built and tested** |
-| M5 | Geographic (offline) | Bundled ZIP DB; ZIP format, ZIP↔state/city/county, PO Box and military checks; batch geo smells | planned |
+| M5 | Geographic (offline) | Bundled ZIP DB; ZIP format, ZIP↔state/city/county, PO Box and military checks; batch geo smells | **built and tested** |
 | M6 | Geographic (online) | `--verify` with USPS Addresses API, OAuth, caching, rate limiting | planned |
 | M7 | Interfaces | JSON/HTML/SARIF output, `--redact`, FastAPI endpoint, paste-in web UI | JSON + CLI built; HTML/SARIF, redaction, API, UI planned |
 | M8 | Switchyard stage | DLQ entries carry grouped reports | planned |
@@ -502,3 +506,6 @@ The golden snapshot is part of `pytest`, and the Docker build joins CI with M7.
 | Rules validated at load time, unknown keys rejected | Lenient parsing with defaults | A rule that silently never fires is worse than one that refuses to load; a typo exits 3 |
 | Batch rules observe, then emit | Buffer whole payloads | Streaming memory stays bounded; collectors cap observations so a pathological batch loses a finding, not the process |
 | Correlation skips pairs on the same path | Correlate every pair | Two problems in one field co-occur by construction; saying so is noise |
+| ZIP reference bundled as SQLite | Call a geocoding API | Most rejections are local disagreements a table settles instantly; no network, no PII leaving the machine, no rate limits in CI |
+| GeoNames + Census, not USPS-licensed data | Buy a commercial ZIP database | The two public sources cover ZIP, state, city and county ratios; the gaps (PO-box-only and unique ZIP types) are documented instead of guessed |
+| Military ZIPs recognised by range | Require a table of APO/FPO ZIPs | The ranges are stable and the alternative is a USPS licence for a dozen lines of code |

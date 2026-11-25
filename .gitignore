@@ -31,6 +31,10 @@ pytest-of-*/
 # Generated demo data (see examples/make_demo_batch.py)
 examples/demo-batch.ndjson
 
+# Raw geographic source files (the built database is committed)
+.data-cache/
+*.sqlite-journal
+
 # Editors and OS
 .idea/
 .vscode/

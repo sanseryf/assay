@@ -6,11 +6,11 @@
 > every error at once, pins each to a path — then groups the findings by root cause, so
 > you fix one mapping instead of reading 4,000 identical failures.
 
-**Status: v0.2 — milestones M1–M4 are built and tested.** Syntax, schema, setup rules
-and string quality all run, with grouped terminal/JSON reports and the 0/1/2/3 exit-code
-contract. The geographic layers (M5–M6), redaction, the API/web UI and HTML/SARIF output
-are designed in [`ARCHITECTURE.md`](ARCHITECTURE.md) and marked **planned** there. This
-README describes only what runs today.
+**Status: v0.3 — milestones M1–M5 are built and tested.** Syntax, schema, setup rules,
+string quality and offline geography all run, with grouped terminal/JSON reports and the
+0/1/2/3 exit-code contract. Online address verification (M6), redaction, the API/web UI
+and HTML/SARIF output are designed in [`ARCHITECTURE.md`](ARCHITECTURE.md) and marked
+**planned** there. This README describes only what runs today.
 
 ## The 2,000-payload demo
 
@@ -102,6 +102,25 @@ mojibake, duplicate keys — everything a schema alone would let through. The fu
 committed as [`examples/demo-report.txt`](examples/demo-report.txt); regenerate it with
 the commands under [Quick start](#quick-start).
 
+## The geographic demo
+
+A second, smaller batch exercises the offline geography layer: twelve member payloads with
+addresses that are each a little wrong — a four-digit ZIP, a Texas ZIP with `OK`, a Dallas
+city on a McKinney ZIP, a PO box in a home field, an APO ZIP with `TX`, a state written
+`Texas`, a home address equal to the employer's, two household members with different
+addresses. Eleven groups, one fix each:
+
+```text
+Assay · 12 payloads · 2 clean · 10 with errors · 4 ms
+
+ 1  ██████  geo  members[*].home_address.city   city is not associated with this ZIP
+ 2  ██████  geo  members[*].home_address.state  ZIP is in TX
+ ...
+```
+
+The full report is [`examples/geo-demo-report.txt`](examples/geo-demo-report.txt). Every
+lookup is local: the ZIP database ships with the package.
+
 ## Why this exists
 
 Integration support work runs on the same loop: a payload fails, the error message is
@@ -132,6 +151,11 @@ uv run python examples/make_demo_batch.py examples/demo-batch.ndjson
 uv run assay check examples/demo-batch.ndjson \
   --schema examples/member.schema.json \
   --rules examples/member.rules.yaml
+
+# Geography, with the bundled ZIP reference:
+uv run assay check examples/geo-demo.ndjson \
+  --schema examples/member.schema.json \
+  --rules examples/geo.rules.yaml
 ```
 
 A single payload, a glob, a directory or stdin works the same way:
@@ -266,6 +290,58 @@ Findings show the invisible: `zero-width character U+200B`. A report that says "
 character" next to text that looks fine is useless. These are warnings by default,
 because the payload is well-formed — `1` is the exit code when that is all a batch has.
 
+### Layer 5 — geographic (offline)
+
+Downstream systems reject records whose ZIP, city and state disagree, or whose "home
+address" is a mailbox. Those payloads pass every schema check, because `"75071"`,
+`"Dallas"` and `"OK"` are each perfectly valid strings. This layer compares them with
+the bundled reference data and with each other:
+
+| Check | Example | Finding |
+| ----- | ------- | ------- |
+| ZIP format | `7507`, `750711`, `75071-12` | must be `#####` or `#####-####` |
+| stripped leading zero | `7030` in NJ | likely `07030`; the zero was lost as a number |
+| ZIP exists | `99999` | ZIP is not in the reference data |
+| ZIP ↔ state | `75071` with `OK` | ZIP is in TX (grouped by the offending state) |
+| ZIP ↔ city | `75071` with `Dallas` | not an acceptable city; USPS preferred is `MCKINNEY` |
+| city alias | `Jersey City` where `HOBOKEN` is preferred | acceptable variant (information) |
+| ZIP ↔ county | `75071` with `Dallas County` | ZIP is in Collin County |
+| state code | `Texas`, `Tex.` | expect a two-letter code; suggests `TX` |
+| military addresses | `75071` with `AA`, or an APO ZIP with `TX` | APO/FPO/DPO uses `AA`, `AE` or `AP` |
+| PO box as home | `PO Box 123`, `PMB 44` | a home address must be a physical residence |
+| missing street number | `Main St` | line 1 needs a primary number |
+| unit in the wrong field | `123 Main St Apt 4`, line 2 empty | move the unit to line 2 |
+| line length | line 1 at 52 characters | over the configured destination limit |
+| city/state swapped | city `TX`, state `McKinney` | the two fields look swapped |
+| batch smells | every ZIP-state mismatch uses one state | that state is probably defaulted upstream |
+| batch smells | home address equals the employer's | the office address was mapped into the home field |
+| batch smells | household members with different addresses | one address was copied incompletely |
+
+Address fields are declared, not guessed:
+
+```yaml
+geo:
+  addresses:
+    - path: "$.members[*].home_address"
+      residential: true
+      line1_max: 40
+      household_key: "$.members[*].household_id"
+  employer_address: "$.employer.mailing_address"
+```
+
+The reference data is a ~5.6 MB SQLite file that ships inside the package, built from
+GeoNames postal codes and the Census Bureau's ZCTA-to-county relationship file.
+Nothing is sent anywhere. Rebuild it with:
+
+```bash
+uv run python -m assay.geo.build \
+  --geonames US.txt \
+  --census tab20_zcta520_county20_natl.txt
+```
+
+Attribution and known gaps are in [`NOTICE.md`](NOTICE.md). Street-level validity and
+deliverability need the USPS Addresses API, which is milestone M6 and **not built**.
+
 ## Grouping, and why it is the point
 
 Findings are fingerprinted as `layer:rule:normalized-path:signature`:
@@ -323,6 +399,7 @@ src/assay/
   rules.py       layer 3: Pydantic rule config, loaded from YAML
   setup.py       layer 3: per-payload rules and batch collectors
   strings.py     layer 4: mojibake, invisible characters, double encoding
+  geo/           layer 5: bundled ZIP database, builder and address checks
   jsonpath.py    the small JSONPath subset rules are written in
   fingerprint.py path normalization and the fingerprint itself
   grouping.py    collapse, impact ranking, correlation
@@ -331,14 +408,20 @@ src/assay/
   report.py      terminal table (Rich) and JSON
   cli.py         Typer app and the exit-code contract
 ARCHITECTURE.md  the full design; unbuilt sections are marked planned
-examples/        schema, rules, deterministic 2,000-payload generator, sample report
+NOTICE.md        attribution for the bundled GeoNames and Census data
+examples/        schema, rules, deterministic 2,000-payload generator, sample reports
 tests/           unit, golden, CLI, property-based, fixtures
 ```
 
 ## Limitations, stated plainly
 
-- Geographic checks (M5–M6), `--redact`, the HTTP API, the web UI, HTML/SARIF output and
-  the Switchyard stage are **not implemented**. They are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+- **Online address verification (M6)** is not implemented: no USPS API calls, no
+  street-level deliverability. Offline geography checks that ZIP, city, state and
+  county agree, not that a building exists.
+- PO-box-only and "unique" ZIP types are not known without USPS-licensed data, so a
+  residential check catches a written PO Box but not a ZIP that only serves them.
+- `--redact`, the HTTP API, the web UI, HTML/SARIF output and the Switchyard stage are
+  **not implemented**. They are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - Setup rules are the seven kinds above; there is no expression language and no
   per-rule path exclusions.
 - The full JSON Schema vocabulary is not mapped: keywords outside the list above fall
@@ -350,6 +433,14 @@ tests/           unit, golden, CLI, property-based, fixtures
 - Syntax detection is heuristic by nature. It only runs when parsing has already failed,
   and it never blames text inside a valid string.
 - Payloads are not persisted. The report is the only artifact.
+
+## Attribution
+
+The bundled ZIP reference database is built from
+[GeoNames](https://www.geonames.org/) postal codes (CC BY 4.0) and the
+[U.S. Census Bureau](https://www.census.gov/) ZCTA-to-county relationship file (public
+domain). See [`NOTICE.md`](NOTICE.md) for details, rebuild instructions and the gaps in
+the data.
 
 ## License
 

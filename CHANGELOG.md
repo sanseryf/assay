@@ -4,6 +4,48 @@ All notable changes to Assay are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-11-24
+
+Milestone M5: offline geography. The layer that catches addresses which are valid JSON,
+match the schema, and still cannot be delivered.
+
+### Added
+
+- **Layer 5 — geographic (offline).** A ~5.6 MB SQLite reference database ships inside
+  the package (41,128 ZIPs, 40,981 city names, 54,251 ZIP-county rows), built from
+  GeoNames postal codes (CC BY 4.0) and the Census Bureau's ZCTA-to-county relationship
+  file (public domain). No address leaves the machine and no API key is needed.
+  - ZIP format, four-digit ZIPs with the lost leading zero, unknown ZIPs
+  - ZIP ↔ state, ZIP ↔ city (with the USPS preferred name and acceptable variants),
+    ZIP ↔ county (with candidate counties and their area ratios)
+  - two-letter state codes with suggestions, military APO/FPO/DPO ZIPs by range
+  - PO boxes in residential fields, missing street numbers, units in line 1, line-length
+    limits, city/state swaps, parsed with `usaddress`
+  - batch smells: ZIP-state mismatches that all share one state, home addresses equal to
+    the employer's, household members with different addresses
+- **Builder.** `python -m assay.geo.build --geonames US.txt --census <file>` rebuilds the
+  database, writes attribution and build metadata into it, and prints row counts. The
+  wheel includes the database; a missing file fails with exit `3` and the rebuild command.
+- **Configuration.** A `geo:` section declares address paths (`residential`, `line1_max`,
+  `household_key`) and an optional `employer_address`; with no addresses configured the
+  layer does nothing.
+- **Demo.** `examples/geo-demo.ndjson` with twelve deliberately wrong addresses; eleven
+  groups in `examples/geo-demo-report.txt`.
+- **Attribution.** [`NOTICE.md`](NOTICE.md) records the licences, the rebuild command and
+  what the data cannot do (PO-box-only and unique ZIP types, street-level validity).
+
+### Quality
+
+- 227 tests: builder from fixture files, every geographic check, config validation, and a
+  pipeline run through a fixture database. 90% coverage.
+- CI green on Python 3.11 and 3.12.
+
+### Not yet
+
+Online address verification (M6, needs USPS developer credentials), `--redact`,
+HTML/SARIF output, the FastAPI endpoint and web UI, Docker packaging, and the Switchyard
+validation stage. See the milestone table in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 ## [0.2.0] — 2026-11-24
 
 Milestone M4: setup rules and string quality. The two layers that catch payloads which
