@@ -41,6 +41,11 @@ FIRST_NAMES = [
     "Sophie",
     "Vint",
     "Carol",
+    "José",
+    "Renée",
+    "Zoë",
+    "Müller",
+    "Søren",
 ]
 LAST_NAMES = [
     "Lovelace",
@@ -85,6 +90,9 @@ SMART_QUOTES = {204, 1_333}
 TRUNCATED = {777}
 BOM = {1_001}
 
+# Payloads that carry a repeated key; json keeps the last value silently.
+DUPLICATE_KEYS = {11, 402, 1_501, 1_903}
+
 
 def member(rng: random.Random, index: int) -> dict[str, object]:
     first = rng.choice(FIRST_NAMES)
@@ -102,6 +110,9 @@ def member(rng: random.Random, index: int) -> dict[str, object]:
         "hire_date": f"{rng.randint(2015, 2025):04d}-{rng.randint(1, 12):02d}-01",
         "zip": zip_code,
         "coverage_tier": rng.choice(TIERS),
+        # Every record carries the same source tag. That is what an unmapped field
+        # with a hard-coded default looks like, and the constant-smell rule catches it.
+        "source_system": "LEGACY_HR",
     }
 
     if rng.random() < 0.72:
@@ -120,6 +131,21 @@ def member(rng: random.Random, index: int) -> dict[str, object]:
 
     if rng.random() < 0.004:
         record.pop("zip")
+
+    # --- defects that are valid strings but corrupt data (layer 4)
+    if rng.random() < 0.03:
+        record["first_name"] = str(record.get("first_name", "")) + "\u200b"
+    if rng.random() < 0.02:
+        record["last_name"] = " " + str(record["last_name"])
+    if rng.random() < 0.004:
+        record["first_name"] = "TEST"
+    if rng.random() < 0.02 and any(ord(char) > 127 for char in first):
+        # What a UTF-8 name looks like after being decoded as cp1252 upstream.
+        record["first_name"] = first.encode("utf-8").decode("cp1252")
+
+    # --- a record that arrives twice under a different payload (layer 3)
+    if rng.random() < 0.002 and index > 0:
+        record["external_id"] = f"E-{index - 1:06d}"
 
     return record
 
@@ -144,6 +170,8 @@ def main() -> None:
             line = line[: len(line) // 2]
         elif payload_index in BOM:
             line = "\ufeff" + line
+        elif payload_index in DUPLICATE_KEYS:
+            line = '{"batch_id": "B-DUPLICATE", ' + line[1:]
 
         lines.append(line)
 

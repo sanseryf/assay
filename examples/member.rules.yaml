@@ -1,0 +1,54 @@
+# Rules for the demo batch. Every rule here fires on examples/demo-batch.ndjson;
+# run it with:  assay check examples/demo-batch.ndjson \
+#                 --schema examples/member.schema.json \
+#                 --rules examples/member.rules.yaml
+version: 1
+
+duplicate_keys: true
+
+strings:
+  max_length:
+    "$.members[*].first_name": 40
+    "$.members[*].last_name": 40
+
+rules:
+  - id: dob-before-hire
+    kind: compare
+    left: "$.members[*].dob"
+    op: "<="
+    right: "$.members[*].hire_date"
+    severity: error
+    hint: "Date of birth cannot follow the hire date; check the field mapping."
+
+  - id: source-system-default
+    kind: constant_smell
+    path: "$.members[*].source_system"
+    threshold: 0.95
+    min_records: 20
+    severity: warning
+    hint: "A single source tag on every record is usually a hard-coded default."
+
+  - id: placeholder-name
+    kind: placeholder
+    paths: ["$.members[*].first_name"]
+    severity: warning
+    hint: "TEST or N/A in a name field means the mapping fell back to a placeholder."
+
+  - id: tier-case
+    kind: case_drift
+    path: "$.members[*].coverage_tier"
+    min_records: 3
+    severity: warning
+
+  - id: duplicate-member
+    kind: duplicate_records
+    key: "$.members[*].external_id"
+    severity: error
+    hint: "The same external id arrived twice; dedupe or make the write an upsert."
+
+  - id: zip-type
+    kind: type_inconsistency
+    paths: ["$.members[*].zip"]
+    min_records: 5
+    severity: warning
+    hint: "ZIPs are strings in some records and numbers in others; the leading zero is being lost."

@@ -21,7 +21,8 @@
           "coverage_tier": {
             "type": "string",
             "enum": ["EMPLOYEE", "EMPLOYEE_SPOUSE", "EMPLOYEE_CHILD"]
-          }
+          },
+          "source_system": { "type": "string" }
         },
         "additionalProperties": false
       }
