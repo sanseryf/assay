@@ -168,3 +168,59 @@ def test_rules_by_kind_filters(tmp_path: Path) -> None:
 
 def test_default_config_is_reusable() -> None:
     assert RulesConfig().rules == ()
+    assert RulesConfig().geo.active is False
+
+
+def test_geo_addresses_load(tmp_path: Path) -> None:
+    config = load_config(
+        write(
+            tmp_path,
+            """
+            geo:
+              addresses:
+                - path: "$.members[*].home_address"
+                  residential: true
+                  line1_max: 40
+                  household_key: "$.members[*].household_id"
+              employer_address: "$.employer.mailing_address"
+            """,
+        )
+    )
+    assert config.geo.active
+    assert config.geo.addresses[0].line1_max == 40
+    assert config.geo.employer_address == "$.employer.mailing_address"
+
+
+def test_geo_paths_are_validated(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="must start with"):
+        load_config(
+            write(
+                tmp_path,
+                """
+                geo:
+                  addresses:
+                    - path: "members[*].home_address"
+                """,
+            )
+        )
+
+
+def test_geo_unknown_keys_are_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="line_1_max"):
+        load_config(
+            write(
+                tmp_path,
+                """
+                geo:
+                  addresses:
+                    - path: "$.members[*].home_address"
+                      line_1_max: 40
+                """,
+            )
+        )
+
+
+def test_geo_military_state_codes_are_valid_states() -> None:
+    from assay.geo.checks import MILITARY_STATES, US_STATES
+
+    assert MILITARY_STATES <= US_STATES
