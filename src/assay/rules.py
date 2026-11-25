@@ -172,6 +172,60 @@ class StringsConfig(BaseModel):
         return value
 
 
+class GeoAddressConfig(BaseModel):
+    """One address field in the payload, and what the destination expects of it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str
+    residential: bool = True
+    line1_max: int | None = Field(default=None, ge=1)
+    household_key: str | None = None
+
+    @field_validator("path")
+    @classmethod
+    def _valid_path(cls, value: str) -> str:
+        try:
+            parse(value)
+        except PathError as exc:
+            raise ValueError(str(exc)) from exc
+        return value
+
+    @field_validator("household_key")
+    @classmethod
+    def _valid_optional_path(cls, value: str | None) -> str | None:
+        if value is not None:
+            try:
+                parse(value)
+            except PathError as exc:
+                raise ValueError(str(exc)) from exc
+        return value
+
+
+class GeoConfig(BaseModel):
+    """Offline geography. With no addresses configured, the layer does nothing."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = True
+    addresses: tuple[GeoAddressConfig, ...] = ()
+    employer_address: str | None = None
+
+    @field_validator("employer_address")
+    @classmethod
+    def _valid_employer_path(cls, value: str | None) -> str | None:
+        if value is not None:
+            try:
+                parse(value)
+            except PathError as exc:
+                raise ValueError(str(exc)) from exc
+        return value
+
+    @property
+    def active(self) -> bool:
+        return self.enabled and bool(self.addresses)
+
+
 class RulesConfig(BaseModel):
     """A whole rules file. Every field is optional; an empty file is valid."""
 
@@ -180,6 +234,7 @@ class RulesConfig(BaseModel):
     version: Literal[1] = 1
     duplicate_keys: bool = True
     strings: StringsConfig = Field(default_factory=StringsConfig)
+    geo: GeoConfig = Field(default_factory=GeoConfig)
     rules: tuple[Rule, ...] = ()
 
     @model_validator(mode="after")

@@ -16,6 +16,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
+from .geo.checks import GeoLayer
+from .geo.store import ZipStore
 from .grouping import group_findings
 from .loader import Payload
 from .models import Finding, Layer, Report, Severity
@@ -55,10 +57,17 @@ class Pipeline:
         schema_id: str = "schema",
         rules: RulesConfig | None = None,
         limits: Limits | None = None,
+        geo_store: ZipStore | None = None,
     ) -> None:
         self.schema_layer = SchemaLayer(schema, schema_id=schema_id) if schema is not None else None
         self.rules = rules or RulesConfig()
         self.limits = limits or Limits()
+        self._geo_store = geo_store
+        self.geo_layer: GeoLayer | None = None
+        if self.rules.geo.active:
+            self.geo_layer = GeoLayer(self.rules.geo, geo_store)
+            # Open the reference database now so a missing file fails at startup.
+            self._geo_store = self.geo_layer.store
 
     def run(self, payloads: Iterable[Payload]) -> Report:
         """Check every payload, then group the batch."""
@@ -69,7 +78,7 @@ class Pipeline:
 
         for payload in payloads:
             scanned += 1
-            checked = self._check_one(payload, setup)
+            checked = self._check_one(payload, setup, self.geo_layer)
             if checked.findings:
                 findings.extend(checked.findings)
             else:
@@ -78,6 +87,8 @@ class Pipeline:
                 setup.observe(checked.document, payload.payload_id)
 
         findings.extend(setup.finalize())
+        if self.geo_layer is not None:
+            findings.extend(self.geo_layer.finalize())
         return Report(
             payloads_scanned=scanned,
             payloads_clean=clean,
@@ -87,9 +98,11 @@ class Pipeline:
 
     def check_one(self, payload: Payload) -> list[Finding]:
         """Everything wrong with one payload, ignoring batch-level rules."""
-        return self._check_one(payload, SetupLayer(self.rules)).findings
+        setup = SetupLayer(self.rules)
+        geo = GeoLayer(self.rules.geo, self._geo_store) if self.rules.geo.active else None
+        return self._check_one(payload, setup, geo).findings
 
-    def _check_one(self, payload: Payload, setup: SetupLayer) -> PayloadCheck:
+    def _check_one(self, payload: Payload, setup: SetupLayer, geo: GeoLayer | None) -> PayloadCheck:
         if payload.oversized:
             return PayloadCheck(
                 [
@@ -138,6 +151,8 @@ class Pipeline:
                     max_length=self.rules.strings.max_length,
                 )
             )
+        if geo is not None:
+            findings.extend(geo.check(result.document, payload.payload_id))
         return PayloadCheck(findings, result.document)
 
 

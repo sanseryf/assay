@@ -32,6 +32,7 @@ from rich.console import Console
 from typer.exceptions import TyperException
 
 from . import __version__
+from .geo.store import GeoDataError
 from .loader import InputError, read_payloads
 from .pipeline import DEFAULT_MAX_BYTES, DEFAULT_MAX_DEPTH, Limits, Pipeline
 from .report import print_report, to_json, to_text
@@ -161,6 +162,8 @@ def check(
         )
     except SchemaError as exc:
         _fail(f"invalid schema {schema}: {exc.message}")
+    except GeoDataError as exc:
+        _fail(str(exc))
 
     try:
         payloads = read_payloads(paths, max_bytes=max_bytes)

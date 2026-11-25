@@ -7,6 +7,8 @@ are designed in ``ARCHITECTURE.md`` at the repository root and not built yet.
 
 from __future__ import annotations
 
+from .geo.checks import GeoLayer
+from .geo.store import GeoDataError, ZipStore
 from .loader import InputError, Payload, read_payloads
 from .models import Finding, Group, Layer, Report, Severity
 from .pipeline import Limits, Pipeline, check_payloads
@@ -15,11 +17,13 @@ from .schema import SchemaLayer
 from .setup import SetupLayer
 from .syntax import SyntaxResult, analyze
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "ConfigError",
     "Finding",
+    "GeoDataError",
+    "GeoLayer",
     "Group",
     "InputError",
     "Layer",
@@ -32,6 +36,7 @@ __all__ = [
     "SetupLayer",
     "Severity",
     "SyntaxResult",
+    "ZipStore",
     "__version__",
     "analyze",
     "check_payloads",
