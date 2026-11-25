@@ -1,8 +1,8 @@
 """Assay: a JSON payload error identifier.
 
 Layers 1 (syntax) and 2 (schema) feed a grouper that reports root causes instead of
-thousands of identical failures. Layers 3-5 are designed in ``docs/ARCHITECTURE.md``
-and not built yet.
+thousands of identical failures. Layers 3-5 are designed in ``ARCHITECTURE.md`` at the
+repository root and not built yet.
 """
 
 from __future__ import annotations

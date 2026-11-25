@@ -375,6 +375,14 @@ Exit codes make it CI-friendly: `0` clean · `1` warnings only · `2` errors fou
 
 ### Example terminal report
 
+The report v0.1 actually produces for the 2,000-payload demo is committed at
+[`examples/demo-report.txt`](examples/demo-report.txt) and shown in the README: ten
+groups, ranked, with samples, hints, a correlation note and a "start here" line.
+
+The sketch below is the **target** output once layers 3–5 exist (and therefore shows
+`string`, `setup` and `geo` rows plus real-looking numbers that are illustrative, not a
+run):
+
 ```
 Assay · 2,000 payloads · 1,766 clean · 234 with errors · 412 ms
 
