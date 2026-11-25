@@ -13,6 +13,7 @@ from assay.grouping import group_findings
 from assay.loader import InputError, Payload, expand_paths, read_payloads
 from assay.models import Finding, Layer, Report, Severity
 from assay.pipeline import Limits, Pipeline, max_depth
+from assay.syntax import analyze
 
 SCHEMA = {
     "type": "object",
@@ -167,3 +168,47 @@ def test_stdin_is_one_payload(monkeypatch: pytest.MonkeyPatch) -> None:
     payloads = list(read_payloads(["-"]))
     assert [item.payload_id for item in payloads] == ["stdin"]
     assert payloads[0].raw == b'{"id": 1}'
+
+
+def test_duplicate_keys_are_detected_during_parsing() -> None:
+    result = analyze(b'{"a": 1, "a": 2, "nested": {"b": 3, "b": 4}}')
+    assert result.ok
+    assert result.duplicate_keys == [("a", "a"), ("nested.b", "b")]
+
+
+def test_pipeline_reports_duplicate_keys() -> None:
+    report = Pipeline(schema=None).run([Payload(payload_id="p1", raw=b'{"a": 1, "a": 2}')])
+    assert report.groups[0].rule == "duplicate-keys"
+    assert report.groups[0].layer is Layer.SETUP
+    assert report.exit_code == 2
+
+
+def test_string_damage_warns_without_failing_the_payload() -> None:
+    report = Pipeline(schema=None).run(
+        [Payload(payload_id="p1", raw='{"name": "Smith\u200b"}'.encode())]
+    )
+    group = report.groups[0]
+    assert group.layer is Layer.STRING
+    assert group.severity is Severity.WARNING
+    assert report.exit_code == 1
+
+
+def test_string_layer_can_be_disabled() -> None:
+    from assay.rules import RulesConfig
+
+    rules = RulesConfig.model_validate({"strings": {"enabled": False}})
+    report = Pipeline(schema=None, rules=rules).run(
+        [Payload(payload_id="p1", raw='{"name": "Smith\u200b"}'.encode())]
+    )
+    assert report.groups == []
+
+
+def test_configured_length_limit_is_enforced() -> None:
+    from assay.rules import RulesConfig
+
+    rules = RulesConfig.model_validate({"strings": {"max_length": {"$.name": 4}}})
+    report = Pipeline(schema=None, rules=rules).run(
+        [Payload(payload_id="p1", raw=b'{"name": "Lovelace"}')]
+    )
+    assert report.groups[0].rule == "too-long"
+    assert report.exit_code == 1

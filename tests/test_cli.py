@@ -181,3 +181,58 @@ def test_internal_error_exits_three(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     with pytest.raises(SystemExit) as info:
         cli.main()
     assert info.value.code == 3
+
+
+DATES_SCHEMA = {
+    "type": "object",
+    "properties": {"start_date": {"type": "string"}, "end_date": {"type": "string"}},
+}
+
+DATES_RULES = """
+version: 1
+rules:
+  - id: dates-ordered
+    kind: compare
+    left: "$.start_date"
+    op: "<="
+    right: "$.end_date"
+    severity: error
+    hint: "End date precedes start date."
+"""
+
+
+def check_with_rules(schema_path: Path, payload_path: Path, rules_path: Path) -> int:
+    return run(
+        [
+            "check",
+            str(payload_path),
+            "--schema",
+            str(schema_path),
+            "--rules",
+            str(rules_path),
+        ]
+    )
+
+
+def test_rules_file_is_applied(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_text(json.dumps(DATES_SCHEMA), encoding="utf-8")
+    payload_path = tmp_path / "payload.json"
+    payload_path.write_text('{"start_date": "2024-09-01", "end_date": "2024-01-01"}')
+    rules_path = tmp_path / "rules.yaml"
+    rules_path.write_text(DATES_RULES, encoding="utf-8")
+
+    assert check_with_rules(schema_path, payload_path, rules_path) == 2
+    assert "must be <=" in capsys.readouterr().out
+
+
+def test_invalid_rules_file_exits_three(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_text(json.dumps(DATES_SCHEMA), encoding="utf-8")
+    payload_path = tmp_path / "payload.json"
+    payload_path.write_text("{}", encoding="utf-8")
+    rules_path = tmp_path / "rules.yaml"
+    rules_path.write_text("rules:\n  - id: x\n    kind: nope\n", encoding="utf-8")
+
+    assert check_with_rules(schema_path, payload_path, rules_path) == 3
+    assert "invalid rules" in capsys.readouterr().err
