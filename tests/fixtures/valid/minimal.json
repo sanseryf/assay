@@ -1,0 +1,14 @@
+{
+  "batch_id": "B-1001",
+  "members": [
+    {
+      "external_id": "E-000001",
+      "first_name": "Ada",
+      "last_name": "Lovelace",
+      "dob": "1990-03-14",
+      "hire_date": "2019-06-01",
+      "zip": "75071",
+      "coverage_tier": "EMPLOYEE"
+    }
+  ]
+}

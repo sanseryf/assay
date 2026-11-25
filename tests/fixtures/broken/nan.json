@@ -1,0 +1,12 @@
+{
+  "batch_id": "B-2007",
+  "members": [
+    {
+      "first_name": "Ada",
+      "last_name": "Lovelace",
+      "dob": "1815-12-10",
+      "zip": "75071",
+      "risk_score": NaN
+    }
+  ]
+}

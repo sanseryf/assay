@@ -1,0 +1,22 @@
+{
+  "batch_id": "B-1002",
+  "members": [
+    {
+      "external_id": "E-000002",
+      "first_name": "Grace",
+      "last_name": "Hopper",
+      "dob": "1906-12-09",
+      "hire_date": "2020-01-15",
+      "zip": "07030-1234",
+      "coverage_tier": "EMPLOYEE_SPOUSE"
+    },
+    {
+      "external_id": "E-000003",
+      "first_name": "Alan",
+      "last_name": "Turing",
+      "dob": "1912-06-23",
+      "zip": "02139",
+      "coverage_tier": "EMPLOYEE_CHILD"
+    }
+  ]
+}

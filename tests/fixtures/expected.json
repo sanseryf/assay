@@ -1,0 +1,203 @@
+{
+  "payloads_scanned": 15,
+  "payloads_clean": 2,
+  "payloads_failed": 13,
+  "findings_total": 13,
+  "errors": 13,
+  "warnings": 0,
+  "infos": 0,
+  "groups": [
+    {
+      "fingerprint": "syntax:bom:$",
+      "layer": "syntax",
+      "rule": "bom",
+      "path": "$",
+      "severity": "error",
+      "message": "byte-order mark at start of file",
+      "hint": "strip the BOM; some Windows editors save UTF-8 with one.",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "syntax:comments:$",
+      "layer": "syntax",
+      "rule": "comments",
+      "path": "$",
+      "severity": "error",
+      "message": "// line comment is not valid JSON",
+      "hint": "remove the comment, or run the file through a JSONC parser first.",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "syntax:encoding:$",
+      "layer": "syntax",
+      "rule": "encoding",
+      "path": "$",
+      "severity": "error",
+      "message": "not valid UTF-8",
+      "hint": "0xe9 is 'é' in cp1252; byte offset 54. Re-export the file as UTF-8 (cp1252 and latin-1 are the usual sources).",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "syntax:non-finite:$",
+      "layer": "syntax",
+      "rule": "non-finite",
+      "path": "$",
+      "severity": "error",
+      "message": "NaN is not valid JSON",
+      "hint": "use null, or a quoted string and convert it downstream.",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [
+        "NaN"
+      ],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "syntax:single-quotes:$",
+      "layer": "syntax",
+      "rule": "single-quotes",
+      "path": "$",
+      "severity": "error",
+      "message": "single-quoted string",
+      "hint": "JSON requires double quotes: {\"key\": \"value\"}.",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "syntax:smart-quotes:$",
+      "layer": "syntax",
+      "rule": "smart-quotes",
+      "path": "$",
+      "severity": "error",
+      "message": "curly quote U+201C (left double quotation mark)",
+      "hint": "replace “ ” ‘ ’ with straight quotes and re-export as UTF-8; Word, Slack and Notion apply this autocorrect.",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "syntax:trailing-comma:$",
+      "layer": "syntax",
+      "rule": "trailing-comma",
+      "path": "$",
+      "severity": "error",
+      "message": "trailing comma before a closing bracket",
+      "hint": "remove the comma at line 8, column 21.",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "syntax:truncation:$",
+      "layer": "syntax",
+      "rule": "truncation",
+      "path": "$",
+      "severity": "error",
+      "message": "unclosed string",
+      "hint": "opened at line 4, column 80; the payload looks cut off. Brackets are still open too.",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "schema:enum:members[*].coverage_tier:enum",
+      "layer": "schema",
+      "rule": "enum",
+      "path": "members[*].coverage_tier",
+      "severity": "error",
+      "message": "value not in allowed set",
+      "hint": "allowed values: EMPLOYEE, EMPLOYEE_SPOUSE, EMPLOYEE_CHILD. Did you mean 'EMPLOYEE'?",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [
+        "employee"
+      ],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "schema:format:members[*].dob:fmt:date",
+      "layer": "schema",
+      "rule": "format",
+      "path": "members[*].dob",
+      "severity": "error",
+      "message": "not a valid date",
+      "hint": "expected date such as YYYY-MM-DD.",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [
+        "08/26/1918"
+      ],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "schema:additionalProperties:members[*].frist_name:additionalProperties",
+      "layer": "schema",
+      "rule": "additionalProperties",
+      "path": "members[*].frist_name",
+      "severity": "error",
+      "message": "unknown field",
+      "hint": "unknown field 'frist_name'. Did you mean 'first_name'?",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [
+        "Alan"
+      ],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "schema:required:members[*].zip:required",
+      "layer": "schema",
+      "rule": "required",
+      "path": "members[*].zip",
+      "severity": "error",
+      "message": "missing required field",
+      "hint": "check the field mapping; a missing field here usually means an empty source column.",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [],
+      "correlated_with": []
+    },
+    {
+      "fingerprint": "schema:type:members[*].zip:type:integer→string",
+      "layer": "schema",
+      "rule": "type",
+      "path": "members[*].zip",
+      "severity": "error",
+      "message": "integer, expected string",
+      "hint": "a number here usually means leading zeros were stripped upstream (07030 became 7030); send the field as a string.",
+      "count": 1,
+      "payloads_affected": 1,
+      "impact": 1.0,
+      "sample_values": [
+        "7030"
+      ],
+      "correlated_with": []
+    }
+  ]
+}

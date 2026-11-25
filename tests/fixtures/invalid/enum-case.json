@@ -1,0 +1,12 @@
+{
+  "batch_id": "B-3003",
+  "members": [
+    {
+      "first_name": "Grace",
+      "last_name": "Hopper",
+      "dob": "1906-12-09",
+      "zip": "07030",
+      "coverage_tier": "employee"
+    }
+  ]
+}
