@@ -1,5 +1,6 @@
-# Hooks run in the project environment, so they use the same ruff and mypy as CI.
-# Enable them once per clone: `uv run pre-commit install`
+# Hooks run through `uv`, so a plain `git commit` works without the virtualenv being
+# active and uses exactly the ruff and mypy versions locked for CI.
+# Enable once per clone: `uv run pre-commit install`
 default_language_version:
   python: python3
 
@@ -8,20 +9,20 @@ repos:
     hooks:
       - id: ruff-check
         name: ruff check
-        entry: ruff check --fix --force-exclude
+        entry: uv run ruff check --fix --force-exclude
         language: system
         types: [python]
         require_serial: true
 
       - id: ruff-format
         name: ruff format
-        entry: ruff format --force-exclude
+        entry: uv run ruff format --force-exclude
         language: system
         types: [python]
 
       - id: mypy
         name: mypy (strict)
-        entry: mypy
+        entry: uv run mypy
         language: system
         pass_filenames: false
         types: [python]

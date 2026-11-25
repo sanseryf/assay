@@ -428,7 +428,7 @@ sequenceDiagram
 
 **Built in v0.1:** schema validators are compiled once per schema and reused across the
 batch; findings stream into the grouper instead of being held per payload; 2,000
-payloads (~1.9 MB) run in roughly 200 ms on a Windows laptop. Files are read within
+payloads (~680 KB) run in roughly 200 ms on a Windows laptop. Files are read within
 the `--max-bytes` bound, and NDJSON is processed one record at a time.
 
 **Planned:** true streaming from disk without loading the file first, a process pool
