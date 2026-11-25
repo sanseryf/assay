@@ -1,4 +1,4 @@
-# Assay — Architecture
+# Assay Architecture
 
 > A JSON payload error identifier. Assay takes one payload or ten thousand, runs them through layered checks (syntax, schema, setup rules, string quality, and geographic validation), then **groups every error by root cause** so you fix one mapping instead of reading 4,000 identical failures.
 
@@ -88,7 +88,7 @@ Each layer emits `Finding` objects into one stream. A syntax failure stops later
 
 ## 3. The five layers
 
-### Layer 1: Syntax — **built**
+### Layer 1: Syntax (built)
 
 Python's `json` module reports position (`JSONDecodeError.lineno`, `.colno`, `.pos`). Assay adds detectors that explain the **common human causes** behind a raw parse failure:
 
@@ -117,7 +117,7 @@ flowchart TB
     DET --> E3[Finding: syntax<br/>line · col · cause · hint]
 ```
 
-### Layer 2: Schema — **built**
+### Layer 2: Schema (built)
 
 `Draft202012Validator(schema).iter_errors(doc)` yields **every** violation with its path, instead of raising on the first. Assay maps each to a `Finding`:
 
@@ -129,7 +129,7 @@ flowchart TB
 
 Format checkers are enabled explicitly (`FormatChecker()`); by default jsonschema treats `format` as annotation only, which is a common silent gap.
 
-### Layer 3: Setup rules — **built (M4)**
+### Layer 3: Setup rules (built in M4)
 
 Valid JSON that matches the schema can still be **wrong**. These rules catch configuration and mapping mistakes:
 
@@ -164,7 +164,7 @@ rules:
     hint: "Nearly all records share one hire date. The field may be unmapped."
 ```
 
-### Layer 4: String quality — **built (M4)**
+### Layer 4: String quality (built in M4)
 
 Assay walks every string value and checks it for corruption that passes every schema:
 
@@ -182,7 +182,7 @@ Assay walks every string value and checks it for corruption that passes every sc
 
 Findings show the invisible: `"Smith⟨U+200B⟩"` with the codepoint spelled out, because a report that says "bad character" next to text that looks fine is useless.
 
-### Layer 5: Geographic — **offline built (M5); USPS verification built, opt-in (M6)**
+### Layer 5: Geographic (offline built in M5; USPS verification built and opt-in in M6)
 
 Downstream systems (insurers, payroll, tax, shipping) routinely reject records whose ZIP, city and state don't agree, or whose "home address" isn't a physical residence. These pass every schema check, because `"75071"`, `"Dallas"` and `"OK"` are each perfectly valid strings. Layer 5 checks that they agree with each other and with reality.
 
@@ -271,7 +271,7 @@ geo:
 
 ---
 
-## 4. Grouping: the core idea — **built in v0.1**
+## 4. Grouping: the core idea (built in v0.1)
 
 A batch of 2,000 payloads with one broken date mapping produces 2,000 identical findings. Assay collapses them.
 
@@ -361,7 +361,7 @@ otherwise.
 
 ## 6. Interfaces
 
-### CLI — **built (terminal and JSON)**
+### CLI (built: terminal and JSON)
 
 ```bash
 # implemented today
@@ -404,7 +404,7 @@ Assay · 2,000 payloads · 1,766 clean · 234 with errors · 412 ms
  6  █       syntax  payload_0441.json:12:5   trailing comma                       1
 ```
 
-### API and Switchyard integration — **API built (M7); Switchyard built separately (M8)**
+### API and Switchyard integration (API built in M7; Switchyard built separately for M8)
 
 `POST /assay` with `{payload, schema, rules?, redact?}` returns a `Report`; `GET /` serves
 the paste-in page, and `GET /health` reports the version. Switchyard (a separate
@@ -460,16 +460,16 @@ for very large batches, and groups merged across workers by fingerprint.
 
 | Level | What | Status |
 |---|---|---|
-| Unit | Each detector against crafted inputs (trailing comma, BOM, smart quotes, truncation at every bracket depth) | built — `tests/test_syntax.py` |
-| Golden files | A corpus of broken payloads → expected report snapshots; any output change shows up in the diff | built — 15 fixtures in `tests/fixtures/`, snapshot in `expected.json` |
-| Property-based | Hypothesis generates valid JSON and asserts no syntax findings; injects a trailing comma and asserts it is found | built — `tests/test_properties.py` |
-| Grouping | N copies of one defect → exactly 1 group with count N; two independent defects → 2 groups | built — `tests/test_grouping.py` |
-| Rules | Bad rule files fail at load; each rule kind fires on crafted data and stays quiet on clean data | built — `tests/test_rules.py`, `tests/test_setup.py` |
-| String layer | One crafted value per corruption, plus clean strings that must stay quiet | built — `tests/test_strings.py` |
-| Geographic (offline) | ZIP/city/state/county triples, military ZIPs, PO boxes, street numbers and batch smells, against a fixture database built from the same builder | built — `tests/test_geo_build.py`, `tests/test_geo_checks.py` |
+| Unit | Each detector against crafted inputs (trailing comma, BOM, smart quotes, truncation at every bracket depth) | built: `tests/test_syntax.py` |
+| Golden files | A corpus of broken payloads → expected report snapshots; any output change shows up in the diff | built: 15 fixtures in `tests/fixtures/`, snapshot in `expected.json` |
+| Property-based | Hypothesis generates valid JSON and asserts no syntax findings; injects a trailing comma and asserts it is found | built: `tests/test_properties.py` |
+| Grouping | N copies of one defect → exactly 1 group with count N; two independent defects → 2 groups | built: `tests/test_grouping.py` |
+| Rules | Bad rule files fail at load; each rule kind fires on crafted data and stays quiet on clean data | built: `tests/test_rules.py`, `tests/test_setup.py` |
+| String layer | One crafted value per corruption, plus clean strings that must stay quiet | built: `tests/test_strings.py` |
+| Geographic (offline) | ZIP/city/state/county triples, military ZIPs, PO boxes, street numbers and batch smells, against a fixture database built from the same builder | built: `tests/test_geo_build.py`, `tests/test_geo_checks.py` |
 | Fuzz | Random bytes never crash Assay; worst case is a syntax finding | built as a Hypothesis property, not a long-running fuzz campaign |
-| Geographic (online) | USPS calls mocked with recorded responses, so CI never hits the network | built — `tests/test_verify.py`; live calls need credentials |
-| Interfaces | API endpoint, paste-in page, HTML/SARIF output and redaction | built — `tests/test_api.py`, `tests/test_formats.py`, `tests/test_redact.py` |
+| Geographic (online) | USPS calls mocked with recorded responses, so CI never hits the network | built: `tests/test_verify.py`; live calls need credentials |
+| Interfaces | API endpoint, paste-in page, HTML/SARIF output and redaction | built: `tests/test_api.py`, `tests/test_formats.py`, `tests/test_redact.py` |
 
 CI: `ruff` → `mypy --strict` → `pytest` with a coverage gate, on Python 3.11 and 3.12.
 The golden snapshot is part of `pytest`, and the Docker build joins CI with M7.

@@ -5,7 +5,7 @@ Findings from every payload flow into one stream, which is then grouped, so the
 report describes the batch rather than repeating itself per record.
 
 Three layers run per payload (syntax, schema, setup, string). Setup rules that are
-properties of the batch — constants, case drift, duplicates, type drift — observe
+properties of the batch, such as constants, case drift, duplicates and type drift, observe
 payloads as they pass and emit their findings at the end.
 """
 

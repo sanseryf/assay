@@ -3,7 +3,7 @@
 Assay ships one data file, `src/assay/geo/data/zips.sqlite`, built from two public
 sources.
 
-## GeoNames — postal codes
+## GeoNames: postal codes
 
 <https://www.geonames.org/>
 
@@ -13,7 +13,7 @@ export (`US.zip` / `US.txt`). GeoNames data is licensed under
 Assay attributes GeoNames in this file, in the README and in the database's `meta`
 table.
 
-## U.S. Census Bureau — ZCTA to county
+## U.S. Census Bureau: ZCTA to county
 
 <https://www.census.gov/geographies/reference-files/time-series/geo/relationship-files.html>
 

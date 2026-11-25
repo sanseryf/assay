@@ -12,7 +12,7 @@ All notable changes to Assay are recorded here. The format follows
   validation service; Switchyard verifies GitHub signatures, dedupes delivery ids,
   routes and retries, and stores Assay's grouped report on every dead letter.
 
-## [1.0.0] — 2026-11-24
+## [1.0.0] - 2026-11-24
 
 Milestones M6 and M7: opt-in USPS verification, and every interface the design called
 for. Assay is feature-complete against the architecture document; the Switchyard stage
@@ -29,7 +29,7 @@ for. Assay is feature-complete against the architecture document; the Switchyard
     overrides the location)
   - requests throttled to the configured rate
   - findings for a standardized address (warning naming the USPS form), a non-match or
-    DPV failure (error), and an API failure (warning — never a crash)
+    DPV failure (error), and an API failure (warning, never a crash)
   - tests use mocked USPS responses; CI never calls the network
 - **Redaction (M7).** `--redact` replaces values with shape tokens in previews and
   samples and scrubs them from hints; hints derived from a value (repaired mojibake, a
@@ -51,14 +51,14 @@ for. Assay is feature-complete against the architecture document; the Switchyard
 - CI: ruff, format check, mypy, pytest with the coverage gate on 3.11 and 3.12, then the
   Docker build.
 
-## [0.3.0] — 2026-11-24
+## [0.3.0] - 2026-11-24
 
 Milestone M5: offline geography. The layer that catches addresses which are valid JSON,
 match the schema, and still cannot be delivered.
 
 ### Added
 
-- **Layer 5 — geographic (offline).** A ~5.6 MB SQLite reference database ships inside
+- **Layer 5: geographic (offline).** A ~5.6 MB SQLite reference database ships inside
   the package (41,128 ZIPs, 40,981 city names, 54,251 ZIP-county rows), built from
   GeoNames postal codes (CC BY 4.0) and the Census Bureau's ZCTA-to-county relationship
   file (public domain). No address leaves the machine and no API key is needed.
@@ -93,14 +93,14 @@ Online address verification (M6, needs USPS developer credentials), `--redact`,
 HTML/SARIF output, the FastAPI endpoint and web UI, Docker packaging, and the Switchyard
 validation stage. See the milestone table in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
-## [0.2.0] — 2026-11-24
+## [0.2.0] - 2026-11-24
 
 Milestone M4: setup rules and string quality. The two layers that catch payloads which
 are valid JSON, match the schema, and are still wrong.
 
 ### Added
 
-- **Layer 3 — setup rules.** YAML rules validated with Pydantic at load time, where
+- **Layer 3: setup rules.** YAML rules validated with Pydantic at load time, where
   unknown keys, malformed paths, duplicate ids and out-of-range thresholds all exit `3`
   instead of silently never firing:
   - `compare` (cross-field ordering), `required_if` (conditional requirements) and
@@ -111,7 +111,7 @@ are valid JSON, match the schema, and are still wrong.
     complaint; they are reported as setup findings.
   - Batch collectors observe payloads as they stream and cap their observations, so a
     pathological batch loses a finding rather than the process.
-- **Layer 4 — string quality.** Mojibake (with the `ftfy` repair shown), zero-width
+- **Layer 4: string quality.** Mojibake (with the `ftfy` repair shown), zero-width
   characters, non-breaking spaces, control characters, leading/trailing whitespace,
   double-encoded JSON, U+FFFD, mixed-script words, and configurable length limits.
   Findings spell out the codepoint: `zero-width character U+200B`.
@@ -142,18 +142,18 @@ Geographic checks (M5 offline, M6 USPS online), `--redact`, HTML/SARIF output, t
 FastAPI endpoint and web UI, Docker packaging, and the Switchyard validation stage. See
 the milestone table in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
-## [0.1.0] — 2026-11-24
+## [0.1.0] - 2026-11-24
 
 First release. Milestones M1–M3: syntax, schema, and grouping.
 
 ### Added
 
-- **Layer 1 — syntax.** `json.loads` failures become findings with a line, a column and a
+- **Layer 1: syntax.** `json.loads` failures become findings with a line, a column and a
   plain-English cause: trailing comma, single quotes, smart quotes, BOM, unescaped
   newline, truncation (bracket-stack scan), comments, NaN/Infinity. Plus non-UTF-8 input,
   which names the offending byte and its cp1252 reading. A BOM is recoverable, so later
   layers still run.
-- **Layer 2 — schema.** Every `Draft202012Validator.iter_errors` violation at once, each
+- **Layer 2: schema.** Every `Draft202012Validator.iter_errors` violation at once, each
   with a JSON path and a fix hint, `FormatChecker` enabled explicitly, and `difflib`
   suggestions for enum values and unknown field names.
 - **Grouping.** Fingerprints of `layer:rule:normalized-path:signature` with no values in

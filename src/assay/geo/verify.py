@@ -1,8 +1,8 @@
 """USPS Addresses API v3: opt-in, cached, throttled, and never required.
 
 The offline layer answers "do these fields agree with the ZIP table?" This module
-answers the next question — "is this a real, deliverable street address?" — which
-only USPS can answer. It is opt-in because it sends address fields to a third party.
+answers the next question: is this a real, deliverable street address? Only USPS can
+answer that. It is opt-in because it sends address fields to a third party.
 
 Design constraints:
 

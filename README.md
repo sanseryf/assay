@@ -3,15 +3,15 @@
 ![CI](https://github.com/sanseryf/assay/actions/workflows/ci.yml/badge.svg)
 
 > **A JSON payload error identifier.** Assay reads one payload or ten thousand, reports
-> every error at once, pins each to a path — then groups the findings by root cause, so
-> you fix one mapping instead of reading 4,000 identical failures.
+> every error at once, pins each finding to a path, and groups the findings by root cause.
+> You fix one mapping instead of reading 4,000 identical failures.
 
-**Status: v1.0 — milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
+**Status: v1.0. Milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
 string quality, offline geography, USPS verification (opt-in), redaction, HTML/SARIF
 reports, an HTTP API with a paste-in page, and a Docker image. The Switchyard validation
-stage (M8) is implemented in the separate **Switchyard** project — signed ingest, routing,
-retries, and a DLQ that stores Assay's grouped report. This README describes only what
-runs in this repository.
+stage (M8) lives in the separate **Switchyard** project: signed ingest, routing, retries,
+and a DLQ that stores Assay's grouped report. This README covers only what runs in this
+repository.
 
 ## The 2,000-payload demo
 
@@ -97,19 +97,19 @@ cause.
 start here · fixing #1 (members[*].zip) clears 2,507 of 9,270 findings (27%).
 ```
 
-Nine thousand findings collapse to nineteen groups across four layers: a ZIP sent as a
-number, a date format, a constant source tag, case drift, zero-width characters,
-mojibake, duplicate keys — everything a schema alone would let through. The full run is
-committed as [`examples/demo-report.txt`](examples/demo-report.txt); regenerate it with
-the commands under [Quick start](#quick-start).
+Nine thousand findings collapse to nineteen groups across four layers. They include a
+ZIP sent as a number, a date format, a constant source tag, case drift, zero-width
+characters, mojibake and duplicate keys: everything a schema alone lets through. The full
+run is committed as [`examples/demo-report.txt`](examples/demo-report.txt); regenerate it
+with the commands under [Quick start](#quick-start).
 
 ## The geographic demo
 
 A second, smaller batch exercises the offline geography layer: twelve member payloads with
-addresses that are each a little wrong — a four-digit ZIP, a Texas ZIP with `OK`, a Dallas
-city on a McKinney ZIP, a PO box in a home field, an APO ZIP with `TX`, a state written
-`Texas`, a home address equal to the employer's, two household members with different
-addresses. Eleven groups, one fix each:
+addresses that are each a little wrong. There is a four-digit ZIP, a Texas ZIP with `OK`,
+a Dallas city on a McKinney ZIP, a PO box in a home field, an APO ZIP with `TX`, a state
+written `Texas`, a home address equal to the employer's, and two household members with
+different addresses. The run produces eleven groups, each with its own fix:
 
 ```text
 Assay · 12 payloads · 2 clean · 10 with errors · 4 ms
@@ -125,9 +125,9 @@ lookup is local: the ZIP database ships with the package.
 ## Why this exists
 
 Integration support work runs on the same loop: a payload fails, the error message is
-vague (`400 Bad Request`), and someone reads raw JSON to find out why. One root cause —
-a date format, an unmapped field, a quote autocorrected by Word — breaks hundreds of
-records at once, but the tooling reports one error at a time.
+vague (`400 Bad Request`), and someone reads raw JSON to find out why. One root cause,
+such as a date format, an unmapped field or a quote autocorrected by Word, breaks
+hundreds of records at once, but the tooling reports one error at a time.
 
 Assay answers three questions:
 
@@ -203,8 +203,8 @@ uv run assay check payload.json --schema schema.json --format html  --output rep
 ### Redaction
 
 `--redact` keeps paths, layers and counts, and replaces values with shape tokens
-(`"J*** S****"`, `"####-##-##"`, `"#####"`). Hints that are *derived* from values — the
-repaired text in a mojibake hint, the standardized address from USPS — are removed
+(`"J*** S****"`, `"####-##-##"`, `"#####"`). Hints that are derived from a value, such as
+the repaired text in a mojibake hint or the standardized address from USPS, are removed
 rather than half-redacted, because a substring scrub cannot know the derived form.
 Fingerprints never contained values, so grouping is unchanged.
 
@@ -240,7 +240,7 @@ docker run --rm -v "$PWD:/data" assay check /data/batch.ndjson --schema /data/sc
 
 ## What it checks today
 
-### Layer 1 — syntax
+### Layer 1: syntax
 
 `json.loads` reports where the parser gave up; that is a position, not a diagnosis. Each
 detector explains the human cause and points at the character:
@@ -265,7 +265,7 @@ separately: the cut is the root cause, and two groups for one defect would be no
 
 A syntax failure stops later layers **for that payload only**; the batch keeps going.
 
-### Layer 2 — schema
+### Layer 2: schema
 
 `Draft202012Validator.iter_errors` yields every violation instead of raising on the
 first. Each becomes a finding with the expected shape and the likely fix: `required`,
@@ -282,7 +282,7 @@ Two details matter:
   stripped upstream (07030 became 7030)"; an enum typo gets the closest allowed value; an
   unknown field gets `Did you mean 'first_name'?`.
 
-### Layer 3 — setup rules
+### Layer 3: setup rules
 
 Valid JSON that matches the schema can still be wrong. Rules are YAML, validated with
 Pydantic at startup (unknown keys, bad paths, duplicate ids and out-of-range thresholds
@@ -319,7 +319,7 @@ keeps the last value; they are reported as setup findings. Batch checks observe 
 as they stream past and emit their findings at the end, with a fixed observation cap so
 a pathological batch loses a finding rather than exhausting memory.
 
-### Layer 4 — string quality
+### Layer 4: string quality
 
 Every string value is checked for damage that passes every schema:
 
@@ -337,9 +337,9 @@ Every string value is checked for damage that passes every schema:
 
 Findings show the invisible: `zero-width character U+200B`. A report that says "bad
 character" next to text that looks fine is useless. These are warnings by default,
-because the payload is well-formed — `1` is the exit code when that is all a batch has.
+because the payload is well formed. `1` is the exit code when that is all a batch has.
 
-### Layer 5 — geographic (offline, plus opt-in USPS verification)
+### Layer 5: geographic (offline, plus opt-in USPS verification)
 
 Downstream systems reject records whose ZIP, city and state disagree, or whose "home
 address" is a mailbox. Those payloads pass every schema check, because `"75071"`,
@@ -395,12 +395,12 @@ because it sends address fields to the USPS Addresses API v3:
 
 - credentials come from `USPS_CLIENT_ID` / `USPS_CLIENT_SECRET` in the environment, never
   from the rules file; without them the run exits `3` and names the variables
-- every result — including "no match" — is cached by normalized-address hash in
+- every result, including a no-match, is cached by normalized-address hash in
   `~/.cache/assay/usps-verification.sqlite` (TTL configurable, `ASSAY_CACHE_DIR`
   overrides the location)
 - requests are throttled to `max_requests_per_minute`
 - a USPS standardization is a warning naming the corrected address, a non-match or DPV
-  failure is an error, and an API outage is a warning — never a crash
+  failure is an error, and an API outage is a warning, not a crash
 - the tests use recorded mock responses, so CI never calls the network. Live behaviour
   depends on your USPS credentials.
 
@@ -422,7 +422,7 @@ The fingerprint contains **no values**, which is why 1,653 records collapse into
 and sample values can be listed separately. Groups are ranked by impact (affected
 records × severity weight), ties broken by layer order, so a syntax error outranks a
 string warning of the same size. When two groups always hit the same records, the report
-says so — `first_name` missing and `frist_name` unknown are one copy-paste mistake, not
+says so: `first_name` missing and `frist_name` unknown are one copy-paste mistake, not
 two bugs.
 
 Correlation is Jaccard overlap of the two affected-record sets, computed only for groups
@@ -445,8 +445,8 @@ uv run mypy                    # strict, configured in pyproject.toml
 
 The suite includes Hypothesis properties that matter: any valid JSON produces no syntax
 findings, a trailing comma is always found, truncation is found at every prefix length,
-and arbitrary bytes never raise. `tests/fixtures/` holds fifteen fixtures — two valid,
-five schema-invalid, eight syntactically broken — and `tests/fixtures/expected.json` pins
+and arbitrary bytes never raise. `tests/fixtures/` holds fifteen fixtures (two valid,
+five schema-invalid, eight syntactically broken), and `tests/fixtures/expected.json` pins
 the whole report. Regenerate it deliberately:
 
 ```bash

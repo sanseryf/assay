@@ -5,8 +5,8 @@ swapped, a field that is a placeholder on every record, an ID that is a string i
 some payloads and a number in others. The checks run in two phases because half of
 them are properties of the batch, not of one payload:
 
-* per payload — ``compare``, ``required_if``, ``placeholder``;
-* across the batch — ``constant_smell``, ``case_drift``, ``duplicate_records``,
+* per payload: ``compare``, ``required_if``, ``placeholder``;
+* across the batch: ``constant_smell``, ``case_drift``, ``duplicate_records``,
   ``type_inconsistency``, plus duplicate keys found while parsing.
 
 Batch state is bounded: every collector stops recording after a fixed number of
