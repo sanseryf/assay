@@ -4,6 +4,14 @@ All notable changes to Assay are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **M8 is built in the separate Switchyard project (v0.1.0).** Assay remains the
+  validation service; Switchyard verifies GitHub signatures, dedupes delivery ids,
+  routes and retries, and stores Assay's grouped report on every dead letter.
+
 ## [1.0.0] — 2026-11-24
 
 Milestones M6 and M7: opt-in USPS verification, and every interface the design called

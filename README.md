@@ -9,8 +9,9 @@
 **Status: v1.0 — milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
 string quality, offline geography, USPS verification (opt-in), redaction, HTML/SARIF
 reports, an HTTP API with a paste-in page, and a Docker image. The Switchyard validation
-stage is designed in [`ARCHITECTURE.md`](ARCHITECTURE.md) and marked **planned**; this
-README describes only what runs today.
+stage (M8) is implemented in the separate **Switchyard** project — signed ingest, routing,
+retries, and a DLQ that stores Assay's grouped report. This README describes only what
+runs in this repository.
 
 ## The 2,000-payload demo
 
@@ -488,8 +489,8 @@ tests/           unit, golden, CLI, property-based, API, fixtures
 
 - **USPS verification is tested against mocked responses**, not against the live API in
   this repository's CI. Live behaviour depends on your credentials and USPS availability.
-- **The Switchyard validation stage (M8) is not implemented.** Everything else in the
-  milestone table ships; see [`ARCHITECTURE.md`](ARCHITECTURE.md).
+- **The Switchyard validation stage (M8) lives in a separate project** (Switchyard
+  v0.1.0); this repository ships the HTTP API it calls.
 - PO-box-only and "unique" ZIP types are not known without USPS-licensed data, so a
   residential check catches a written PO Box but not a ZIP that only serves them.
 - Redaction shapes values and scrubs them from hints, but it is not a guarantee about

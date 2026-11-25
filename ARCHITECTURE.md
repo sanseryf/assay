@@ -5,8 +5,9 @@
 > **Implementation status (v1.0).** This document is the target design. **Milestones
 > M1–M7 are built, tested and shipped:** syntax, schema, setup rules, string quality,
 > offline geography, opt-in USPS verification, grouping, redaction, HTML/SARIF, the HTTP
-> API with a paste-in page, and Docker. The Switchyard validation stage (M8) is marked
-> **planned** below. The README describes only what runs today.
+> API with a paste-in page, and Docker. **M8 is built in the separate Switchyard
+> project** (v0.1.0): signed ingest, routing, retries and a DLQ that stores the grouped
+> report. The README describes what runs in this repository.
 
 **Stack today:** Python 3.11+ · jsonschema (Draft 2020-12) · ftfy · PyYAML · Pydantic ·
 usaddress · SQLite (bundled ZIP reference and USPS cache) · USPS Addresses API v3 (opt-in) ·
@@ -403,12 +404,13 @@ Assay · 2,000 payloads · 1,766 clean · 234 with errors · 412 ms
  6  █       syntax  payload_0441.json:12:5   trailing comma                       1
 ```
 
-### API and Switchyard integration — **API built (M7); Switchyard planned (M8)**
+### API and Switchyard integration — **API built (M7); Switchyard built separately (M8)**
 
 `POST /assay` with `{payload, schema, rules?, redact?}` returns a `Report`; `GET /` serves
-the paste-in page, and `GET /health` reports the version. The client from the original
-design — *failing payloads go to the dead-letter queue with the grouped report attached* —
-is what the Switchyard stage will do with it (M8, not built):
+the paste-in page, and `GET /health` reports the version. Switchyard (a separate
+project, v0.1.0) consumes that endpoint as a validation stage: a payload Assay rejects
+goes to its dead-letter queue with the grouped report attached, so the DLQ explains
+itself.
 
 ```mermaid
 sequenceDiagram
@@ -485,7 +487,7 @@ The golden snapshot is part of `pytest`, and the Docker build joins CI with M7.
 | M5 | Geographic (offline) | Bundled ZIP DB; ZIP format, ZIP↔state/city/county, PO Box and military checks; batch geo smells | **built and tested** |
 | M6 | Geographic (online) | `--verify` with USPS Addresses API, OAuth, caching, rate limiting | **built; live calls need credentials** |
 | M7 | Interfaces | JSON/HTML/SARIF output, `--redact`, FastAPI endpoint, paste-in web UI | **built** |
-| M8 | Switchyard stage | DLQ entries carry grouped reports | planned |
+| M8 | Switchyard stage | DLQ entries carry grouped reports | **built in the separate Switchyard project (v0.1.0)** |
 
 ---
 
