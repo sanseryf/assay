@@ -202,6 +202,16 @@ class GeoAddressConfig(BaseModel):
         return value
 
 
+class VerifyConfig(BaseModel):
+    """USPS Addresses API settings. Off by default: it sends address fields to USPS."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = False
+    cache_ttl_days: int = Field(default=30, ge=1)
+    max_requests_per_minute: int = Field(default=30, ge=1)
+
+
 class GeoConfig(BaseModel):
     """Offline geography. With no addresses configured, the layer does nothing."""
 
@@ -210,6 +220,7 @@ class GeoConfig(BaseModel):
     enabled: bool = True
     addresses: tuple[GeoAddressConfig, ...] = ()
     employer_address: str | None = None
+    verify: VerifyConfig = Field(default_factory=VerifyConfig)
 
     @field_validator("employer_address")
     @classmethod

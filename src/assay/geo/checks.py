@@ -22,6 +22,7 @@ from ..models import Finding, Layer, Severity
 from ..paths import join
 from ..rules import GeoAddressConfig, GeoConfig
 from .store import ZipInfo, ZipStore, military_state, normalize_city, normalize_county
+from .verify import VerificationError, VerifiedAddress, Verifier
 
 US_STATES = frozenset(
     {
@@ -160,9 +161,15 @@ Mismatch = tuple[str, str, str]
 class GeoLayer:
     """Checks configured address objects and remembers what the batch needs."""
 
-    def __init__(self, config: GeoConfig, store: ZipStore | None = None) -> None:
+    def __init__(
+        self,
+        config: GeoConfig,
+        store: ZipStore | None = None,
+        verifier: Verifier | None = None,
+    ) -> None:
         self.config = config
         self._store = store
+        self._verifier = verifier
         self._defaulted: list[Mismatch] = []
         self._households: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
 
@@ -180,6 +187,8 @@ class GeoLayer:
                 if not isinstance(value, dict):
                     continue
                 findings.extend(self._address(path, value, address, payload_id))
+                if self._verifier is not None:
+                    findings.extend(self._verify(path, value, address, payload_id))
                 if self.config.employer_address:
                     findings.extend(
                         self._employer_check(path, value, employer, address, payload_id)
@@ -399,6 +408,78 @@ class GeoLayer:
                 )
         return findings
 
+    # ------------------------------------------------------------------ USPS
+
+    def _verify(
+        self,
+        path: str,
+        value: dict[str, Any],
+        config: GeoAddressConfig,
+        payload_id: str,
+    ) -> list[Finding]:
+        del config  # every declared address is verified when verification is on
+        fields = _fields(value)
+        submitted = {
+            "line1": _text(fields, "line1"),
+            "line2": _text(fields, "line2"),
+            "city": _text(fields, "city"),
+            "state": _text(fields, "state").upper(),
+            "zip": _text(fields, "zip"),
+        }
+        if not all(submitted[key] for key in ("line1", "city", "state", "zip")):
+            return []  # incomplete addresses are already reported offline
+        try:
+            assert self._verifier is not None
+            result = self._verifier.verify(submitted)
+        except VerificationError as exc:
+            return [
+                self._finding(
+                    "verify-failed",
+                    path,
+                    "USPS verification failed",
+                    str(exc),
+                    payload_id,
+                    severity=Severity.WARNING,
+                )
+            ]
+        if result is None:
+            return [
+                self._finding(
+                    "address-unverified",
+                    join(path, "line1"),
+                    "USPS could not verify this address",
+                    "USPS returned no match; check the street number, street name and ZIP.",
+                    payload_id,
+                    preview_value=submitted["line1"],
+                )
+            ]
+
+        findings: list[Finding] = []
+        if not result.deliverable:
+            findings.append(
+                self._finding(
+                    "address-not-deliverable",
+                    join(path, "line1"),
+                    "USPS did not confirm deliverability",
+                    "DPV did not confirm this address; ask the member to confirm it.",
+                    payload_id,
+                    preview_value=submitted["line1"],
+                )
+            )
+        if _standardized(submitted) != _standardized(_as_submitted(result)):
+            findings.append(
+                self._finding(
+                    "address-corrected",
+                    join(path, "line1"),
+                    "USPS standardized this address",
+                    f"USPS: {result.as_text()}",
+                    payload_id,
+                    severity=Severity.WARNING,
+                    preview_value=submitted["line1"],
+                )
+            )
+        return findings
+
     # ------------------------------------------------------------------ batch
 
     def _employer(self, document: Any) -> tuple[str, ...] | None:
@@ -543,6 +624,27 @@ def _address_key(value: dict[str, Any]) -> tuple[str, ...]:
         normalize_city(_text(fields, "city")),
         _text(fields, "state").upper(),
         zip_code,
+    )
+
+
+def _as_submitted(result: VerifiedAddress) -> dict[str, Any]:
+    return {
+        "line1": result.line1,
+        "line2": result.line2,
+        "city": result.city,
+        "state": result.state,
+        "zip": result.zip,
+    }
+
+
+def _standardized(address: dict[str, Any]) -> tuple[str, str, str, str, str]:
+    fields = _fields(address)
+    return (
+        " ".join(_text(fields, "line1").upper().split()),
+        " ".join(_text(fields, "line2").upper().split()),
+        normalize_city(_text(fields, "city")),
+        _text(fields, "state").upper(),
+        _text(fields, "zip")[:5],
     )
 
 

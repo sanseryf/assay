@@ -18,9 +18,11 @@ from typing import Any
 
 from .geo.checks import GeoLayer
 from .geo.store import ZipStore
+from .geo.verify import UspsVerifier
 from .grouping import group_findings
 from .loader import Payload
 from .models import Finding, Layer, Report, Severity
+from .redact import collect_values, redact_finding
 from .rules import RulesConfig
 from .schema import SchemaLayer
 from .setup import SetupLayer
@@ -58,14 +60,23 @@ class Pipeline:
         rules: RulesConfig | None = None,
         limits: Limits | None = None,
         geo_store: ZipStore | None = None,
+        redact: bool = False,
     ) -> None:
         self.schema_layer = SchemaLayer(schema, schema_id=schema_id) if schema is not None else None
         self.rules = rules or RulesConfig()
         self.limits = limits or Limits()
+        self.redact = redact
+        self._values: set[str] = set()
         self._geo_store = geo_store
+        self._verifier: UspsVerifier | None = None
+        if self.rules.geo.active and self.rules.geo.verify.enabled:
+            self._verifier = UspsVerifier.from_env(
+                ttl_days=self.rules.geo.verify.cache_ttl_days,
+                max_per_minute=self.rules.geo.verify.max_requests_per_minute,
+            )
         self.geo_layer: GeoLayer | None = None
         if self.rules.geo.active:
-            self.geo_layer = GeoLayer(self.rules.geo, geo_store)
+            self.geo_layer = GeoLayer(self.rules.geo, geo_store, self._verifier)
             # Open the reference database now so a missing file fails at startup.
             self._geo_store = self.geo_layer.store
 
@@ -86,20 +97,28 @@ class Pipeline:
             if checked.document is not None:
                 setup.observe(checked.document, payload.payload_id)
 
-        findings.extend(setup.finalize())
+        batch: list[Finding] = list(setup.finalize())
         if self.geo_layer is not None:
-            findings.extend(self.geo_layer.finalize())
+            batch.extend(self.geo_layer.finalize())
+        if self.redact:
+            batch = [redact_finding(finding, self._values) for finding in batch]
+        findings.extend(batch)
         return Report(
             payloads_scanned=scanned,
             payloads_clean=clean,
             groups=group_findings(findings),
             duration_ms=int((time.perf_counter() - started) * 1000),
+            redacted=self.redact,
         )
 
     def check_one(self, payload: Payload) -> list[Finding]:
         """Everything wrong with one payload, ignoring batch-level rules."""
         setup = SetupLayer(self.rules)
-        geo = GeoLayer(self.rules.geo, self._geo_store) if self.rules.geo.active else None
+        geo = (
+            GeoLayer(self.rules.geo, self._geo_store, self._verifier)
+            if self.rules.geo.active
+            else None
+        )
         return self._check_one(payload, setup, geo).findings
 
     def _check_one(self, payload: Payload, setup: SetupLayer, geo: GeoLayer | None) -> PayloadCheck:
@@ -153,6 +172,10 @@ class Pipeline:
             )
         if geo is not None:
             findings.extend(geo.check(result.document, payload.payload_id))
+        if self.redact:
+            values = collect_values(result.document)
+            self._values.update(values)
+            findings = [redact_finding(finding, values) for finding in findings]
         return PayloadCheck(findings, result.document)
 
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "assay"
-version = "0.3.0"
+version = "1.0.0"
 description = "JSON payload error identifier: every error, pinned to a path, grouped by root cause"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -36,6 +36,10 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.10",
     "pre-commit>=3.7",
+]
+api = [
+    "fastapi>=0.165.0",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
@@ -81,5 +85,8 @@ branch = true
 
 [dependency-groups]
 dev = [
+    "fastapi>=0.165.0",
+    "httpx>=0.28.1",
     "types-pyyaml>=6.0.12.20261122",
+    "uvicorn>=0.54.0",
 ]

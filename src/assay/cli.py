@@ -32,8 +32,11 @@ from rich.console import Console
 from typer.exceptions import TyperException
 
 from . import __version__
+from .formats import to_html, to_sarif
 from .geo.store import GeoDataError
+from .geo.verify import VerificationError
 from .loader import InputError, read_payloads
+from .models import Report
 from .pipeline import DEFAULT_MAX_BYTES, DEFAULT_MAX_DEPTH, Limits, Pipeline
 from .report import print_report, to_json, to_text
 from .rules import ConfigError, RulesConfig, load_config
@@ -44,7 +47,7 @@ app = typer.Typer(
     help="Check JSON payloads and group the errors by root cause.",
 )
 
-FORMATS = ("terminal", "json")
+FORMATS = ("terminal", "json", "html", "sarif")
 
 
 class _Status(Exception):
@@ -114,7 +117,7 @@ def check(
         "terminal",
         "--format",
         "-f",
-        help="Report format: terminal or json.",
+        help="Report format: terminal, json, html or sarif.",
     ),
     output: Path | None = typer.Option(
         None,
@@ -127,6 +130,16 @@ def check(
         "--quiet",
         "-q",
         help="Print nothing; the exit code is the answer.",
+    ),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help="Ask USPS to verify addresses (needs USPS_CLIENT_ID / USPS_CLIENT_SECRET).",
+    ),
+    redact: bool = typer.Option(
+        False,
+        "--redact",
+        help="Replace values with shape tokens in the report.",
     ),
     max_bytes: int = typer.Option(
         DEFAULT_MAX_BYTES,
@@ -153,16 +166,27 @@ def check(
             rules_config = load_config(rules)
         except ConfigError as exc:
             _fail(str(exc))
+    if verify and not rules_config.geo.verify.enabled:
+        rules_config = rules_config.model_copy(
+            update={
+                "geo": rules_config.geo.model_copy(
+                    update={"verify": rules_config.geo.verify.model_copy(update={"enabled": True})}
+                )
+            }
+        )
     try:
         pipeline = Pipeline(
             schema=schema_document,
             schema_id=str(schema),
             rules=rules_config,
             limits=Limits(max_bytes=max_bytes, max_depth=max_depth),
+            redact=redact,
         )
     except SchemaError as exc:
         _fail(f"invalid schema {schema}: {exc.message}")
     except GeoDataError as exc:
+        _fail(str(exc))
+    except VerificationError as exc:
         _fail(str(exc))
 
     try:
@@ -179,22 +203,33 @@ def check(
     if quiet:
         raise _Status(report.exit_code)
 
-    rendered = to_json(report) if report_format == "json" else to_text(report)
+    rendered = _render(report, report_format)
     if output is not None:
         try:
             output.write_text(rendered + "\n", encoding="utf-8")
         except OSError as exc:
             _fail(f"cannot write {output}: {exc.strerror or exc}")
-    elif report_format == "json":
-        _emit(rendered)
-    elif _stdout_is_a_terminal():
-        print_report(report)
+    elif report_format == "terminal":
+        if _stdout_is_a_terminal():
+            print_report(report)
+        else:
+            # A pipe or a redirected file: plain ASCII survives a cp1252 console and
+            # keeps CI logs readable. `--output` still writes the Unicode version.
+            _emit(to_text(report, ascii_only=True))
     else:
-        # A pipe or a redirected file: plain ASCII survives a cp1252 console and
-        # keeps CI logs readable. `--output` still writes the Unicode version.
-        _emit(to_text(report, ascii_only=True))
+        _emit(rendered)
 
     raise _Status(report.exit_code)
+
+
+def _render(report: Report, report_format: str) -> str:
+    if report_format == "json":
+        return to_json(report)
+    if report_format == "html":
+        return to_html(report)
+    if report_format == "sarif":
+        return to_sarif(report)
+    return to_text(report)
 
 
 def _stdout_is_a_terminal() -> bool:
@@ -211,6 +246,21 @@ def _emit(text: str) -> None:
     except UnicodeEncodeError:  # e.g. cp1252 stdout with a non-Latin sample value
         sys.stdout.buffer.write((text + "\n").encode("utf-8"))
         sys.stdout.flush()
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", help="Interface to bind."),
+    port: int = typer.Option(8000, help="Port to bind."),
+) -> None:
+    """Serve the HTTP API and the paste-in page."""
+    try:
+        import uvicorn
+
+        from .api import create_app
+    except ImportError:
+        _fail('the API needs the optional dependencies: pip install "assay[api]"')
+    uvicorn.run(create_app(), host=host, port=port)
 
 
 def _load_schema(path: Path) -> dict[str, object]:

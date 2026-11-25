@@ -155,6 +155,7 @@ class Report:
     payloads_clean: int = 0
     groups: list[Group] = field(default_factory=list)
     duration_ms: int = 0
+    redacted: bool = False
 
     @property
     def findings_total(self) -> int:
@@ -200,6 +201,7 @@ class Report:
             "warnings": self.warnings,
             "infos": self.infos,
             "duration_ms": self.duration_ms,
+            "redacted": self.redacted,
             "groups": [
                 {
                     "fingerprint": g.fingerprint,
