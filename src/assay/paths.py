@@ -32,11 +32,18 @@ def join(parent: str, field: str) -> str:
 
 
 def walk(value: object, parts: tuple[Part, ...] = ()) -> Iterator[tuple[str, object]]:
-    """Yield ``(path, value)`` for every node, depth first, root included."""
-    yield format_path(parts), value
-    if isinstance(value, dict):
-        for key, child in value.items():
-            yield from walk(child, (*parts, str(key)))
-    elif isinstance(value, list):
-        for index, child in enumerate(value):
-            yield from walk(child, (*parts, index))
+    """Yield ``(path, value)`` for every node, depth first, root included.
+
+    Iterative on purpose: a 3,000-level payload must produce an ``input-too-deep``
+    finding, not a ``RecursionError`` from the walk that looks for duplicate keys.
+    """
+    stack: list[tuple[object, tuple[Part, ...]]] = [(value, parts)]
+    while stack:
+        node, trail = stack.pop()
+        yield format_path(trail), node
+        children: list[tuple[object, tuple[Part, ...]]] = []
+        if isinstance(node, dict):
+            children = [(child, (*trail, str(key))) for key, child in node.items()]
+        elif isinstance(node, list):
+            children = [(child, (*trail, index)) for index, child in enumerate(node)]
+        stack.extend(reversed(children))

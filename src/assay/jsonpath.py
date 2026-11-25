@@ -47,36 +47,35 @@ def parse(expr: str) -> list[Token]:
 
 
 def resolve(document: Any, path: str | Sequence[Token]) -> list[tuple[str, Any]]:
-    """Every ``(path, value)`` the expression matches, in document order."""
+    """Every ``(path, value)`` the expression matches, in document order.
+
+    Iterative for the same reason :func:`assay.paths.walk` is: rules must never turn
+    a deeply nested payload into a ``RecursionError``.
+    """
     tokens = parse(path) if isinstance(path, str) else list(path)
     found: list[tuple[str, Any]] = []
-    _walk(document, tokens, (), found)
+    stack: list[tuple[Any, int, tuple[Token, ...]]] = [(document, 0, ())]
+    while stack:
+        value, position, trail = stack.pop()
+        if position == len(tokens):
+            found.append((format_path(trail), value))
+            continue
+        token = tokens[position]
+        children: list[tuple[Any, tuple[Token, ...]]] = []
+        if token == WILDCARD:
+            if isinstance(value, dict):
+                children = [(child, (*trail, str(key))) for key, child in value.items()]
+            elif isinstance(value, list):
+                children = [(child, (*trail, index)) for index, child in enumerate(value)]
+        elif isinstance(token, int):
+            if isinstance(value, list) and -len(value) <= token < len(value):
+                children = [(value[token], (*trail, token))]
+        elif isinstance(value, dict) and token in value:
+            children = [(value[token], (*trail, token))]
+        stack.extend(
+            (child, position + 1, child_trail) for child, child_trail in reversed(children)
+        )
     return found
-
-
-def _walk(
-    value: Any,
-    tokens: Sequence[Token],
-    trail: tuple[Token, ...],
-    found: list[tuple[str, Any]],
-) -> None:
-    if not tokens:
-        found.append((format_path(trail), value))
-        return
-
-    token, rest = tokens[0], tokens[1:]
-    if token == WILDCARD:
-        if isinstance(value, dict):
-            for key, child in value.items():
-                _walk(child, rest, (*trail, str(key)), found)
-        elif isinstance(value, list):
-            for index, child in enumerate(value):
-                _walk(child, rest, (*trail, index), found)
-    elif isinstance(token, int):
-        if isinstance(value, list) and -len(value) <= token < len(value):
-            _walk(value[token], rest, (*trail, token), found)
-    elif isinstance(value, dict) and token in value:
-        _walk(value[token], rest, (*trail, token), found)
 
 
 def sibling(path: str, field: str) -> str:
