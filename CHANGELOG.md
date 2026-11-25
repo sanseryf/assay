@@ -4,6 +4,55 @@ All notable changes to Assay are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-11-24
+
+Milestone M4: setup rules and string quality. The two layers that catch payloads which
+are valid JSON, match the schema, and are still wrong.
+
+### Added
+
+- **Layer 3 — setup rules.** YAML rules validated with Pydantic at load time, where
+  unknown keys, malformed paths, duplicate ids and out-of-range thresholds all exit `3`
+  instead of silently never firing:
+  - `compare` (cross-field ordering), `required_if` (conditional requirements) and
+    `placeholder` (TEST, N/A, 0000000000) per payload;
+  - `constant_smell` (a field with one value on ≥95% of records), `case_drift`,
+    `duplicate_records` (natural key) and `type_inconsistency` across the batch.
+  - Duplicate keys are found while parsing, because `json` keeps the last value without
+    complaint; they are reported as setup findings.
+  - Batch collectors observe payloads as they stream and cap their observations, so a
+    pathological batch loses a finding rather than the process.
+- **Layer 4 — string quality.** Mojibake (with the `ftfy` repair shown), zero-width
+  characters, non-breaking spaces, control characters, leading/trailing whitespace,
+  double-encoded JSON, U+FFFD, mixed-script words, and configurable length limits.
+  Findings spell out the codepoint: `zero-width character U+200B`.
+- **Rule paths.** A deliberately small JSONPath subset (`$.members[*].dob`,
+  `$.members[0].dob`) with tests for the paths rules are allowed to use.
+- **CLI.** `--rules/-r` for setup and string configuration; `assay check` now runs four
+  layers. The 0/1/2/3 exit-code contract is unchanged, and `1` is finally reachable:
+  warning-only batches (string damage, configuration smells) fail no harder than that.
+- **Demo.** The 2,000-payload generator now also plants string and setup defects
+  (constant source tag, case drift, duplicate keys and records, placeholders, zero-width
+  characters, mojibake, whitespace). The committed report shows 9,270 findings collapsing
+  to 19 groups across all four layers.
+
+### Changed
+
+- Correlation now requires 90% overlap (was 80%) and never compares two groups on the
+  same path: problems in one field co-occur by construction, so those notes were noise.
+
+### Quality
+
+- 193 tests: the M1–M3 suite plus rule-file validation, every rule kind, every string
+  check, duplicate-key parsing and end-to-end pipeline coverage.
+- 91% line coverage, `ruff` and `mypy --strict` clean, golden snapshot unchanged.
+
+### Not yet
+
+Geographic checks (M5 offline, M6 USPS online), `--redact`, HTML/SARIF output, the
+FastAPI endpoint and web UI, Docker packaging, and the Switchyard validation stage. See
+the milestone table in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 ## [0.1.0] — 2026-11-24
 
 First release. Milestones M1–M3: syntax, schema, and grouping.
@@ -26,8 +75,8 @@ First release. Milestones M1–M3: syntax, schema, and grouping.
   where 3 always means Assay could not run.
 - **Terminal report.** Rich table ranked by impact with hint lines and sample values, a
   correlation note, and a "start here" line naming the fix that clears the most findings.
-- **Demo.** A deterministic generator for a 2,000-payload batch in which 2,993 findings
-  collapse to 10 groups and one fix clears 84%.
+- **Demo.** A deterministic generator for a 2,000-payload batch whose findings collapse
+  to a handful of groups.
 - **Guards.** Input size and nesting-depth limits, including a `RecursionError` path for
   payloads too deep for the parser.
 
@@ -45,4 +94,5 @@ Layers 3–5 (setup rules, string quality, geographic checks), `--redact`, HTML/
 output, the FastAPI endpoint and web UI, Docker packaging, and the Switchyard validation
 stage. See the milestone table in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
+[0.2.0]: https://github.com/sanseryf/assay/releases/tag/v0.2.0
 [0.1.0]: https://github.com/sanseryf/assay/releases/tag/v0.1.0

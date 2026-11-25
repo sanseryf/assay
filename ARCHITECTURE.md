@@ -2,15 +2,16 @@
 
 > A JSON payload error identifier. Assay takes one payload or ten thousand, runs them through layered checks (syntax, schema, setup rules, string quality, and geographic validation), then **groups every error by root cause** so you fix one mapping instead of reading 4,000 identical failures.
 
-> **Implementation status (v0.1).** This document is the target design. **Milestones
-> M1–M3 are built, tested and shipped:** the syntax layer, the schema layer, and
-> grouping with terminal/JSON reports and a 0/1/2/3 exit-code contract. Everything
-> else — layers 3–5, redaction, the API and web UI, HTML/SARIF output, the Switchyard
-> stage — is marked **planned** below. The README describes only what runs today.
+> **Implementation status (v0.2).** This document is the target design. **Milestones
+> M1–M4 are built, tested and shipped:** syntax, schema, setup rules, string quality and
+> grouping, with terminal/JSON reports and a 0/1/2/3 exit-code contract. The geographic
+> layers (M5–M6), redaction, the API and web UI, HTML/SARIF output and the Switchyard
+> stage are marked **planned** below. The README describes only what runs today.
 
-**Stack today:** Python 3.11+ · jsonschema (Draft 2020-12) · Typer (CLI) · Rich (terminal reports) · pytest + Hypothesis · GitHub Actions (ruff → mypy --strict → pytest)
+**Stack today:** Python 3.11+ · jsonschema (Draft 2020-12) · ftfy · PyYAML · Pydantic ·
+Typer (CLI) · Rich (terminal reports) · pytest + Hypothesis · GitHub Actions (ruff → mypy --strict → pytest)
 
-**Stack planned:** ftfy (M4) · usaddress (M5) · SQLite bundled ZIP reference (M5) · USPS Addresses API (M6) · FastAPI + web UI (M7) · Docker (M7) · Switchyard integration (M8)
+**Stack planned:** usaddress and a bundled SQLite ZIP reference (M5) · USPS Addresses API (M6) · FastAPI + web UI (M7) · Docker (M7) · Switchyard integration (M8)
 
 ---
 
@@ -125,7 +126,7 @@ flowchart TB
 
 Format checkers are enabled explicitly (`FormatChecker()`); by default jsonschema treats `format` as annotation only, which is a common silent gap.
 
-### Layer 3: Setup rules — **planned (M4)**
+### Layer 3: Setup rules — **built (M4)**
 
 Valid JSON that matches the schema can still be **wrong**. These rules catch configuration and mapping mistakes:
 
@@ -160,7 +161,7 @@ rules:
     hint: "Nearly all records share one hire date. The field may be unmapped."
 ```
 
-### Layer 4: String quality — **planned (M4)**
+### Layer 4: String quality — **built (M4)**
 
 Assay walks every string value and checks it for corruption that passes every schema:
 
@@ -362,11 +363,11 @@ otherwise.
 ```bash
 # implemented today
 assay check payloads/*.json --schema member.schema.json
+assay check payloads/*.json --schema member.schema.json --rules rules.yaml
 assay check batch.ndjson --format json -o report.json
 cat payload.json | assay check - --schema member.schema.json
 
 # planned
-assay check payloads/*.json --rules rules.yaml          # M4
 assay check batch.ndjson --format html -o report.html   # M7
 cat payload.json | assay check - --redact               # M7
 ```
@@ -434,10 +435,12 @@ sequenceDiagram
 
 ## 8. Performance
 
-**Built in v0.1:** schema validators are compiled once per schema and reused across the
-batch; findings stream into the grouper instead of being held per payload; 2,000
-payloads (~680 KB) run in roughly 200 ms on a Windows laptop. Files are read within
-the `--max-bytes` bound, and NDJSON is processed one record at a time.
+**Built in v0.1–v0.2:** schema validators are compiled once per schema and reused across
+the batch; findings stream into the grouper instead of being held per payload; batch
+rules observe each payload as it passes rather than retaining it. 2,000 payloads
+(~800 KB) run in roughly half a second with rules and string checks enabled. Files are
+read within the `--max-bytes` bound, NDJSON is processed one record at a time, and every
+batch collector has a fixed observation cap.
 
 **Planned:** true streaming from disk without loading the file first, a process pool
 for very large batches, and groups merged across workers by fingerprint.
@@ -454,6 +457,8 @@ for very large batches, and groups merged across workers by fingerprint.
 | Golden files | A corpus of broken payloads → expected report snapshots; any output change shows up in the diff | built — 15 fixtures in `tests/fixtures/`, snapshot in `expected.json` |
 | Property-based | Hypothesis generates valid JSON and asserts no syntax findings; injects a trailing comma and asserts it is found | built — `tests/test_properties.py` |
 | Grouping | N copies of one defect → exactly 1 group with count N; two independent defects → 2 groups | built — `tests/test_grouping.py` |
+| Rules | Bad rule files fail at load; each rule kind fires on crafted data and stays quiet on clean data | built — `tests/test_rules.py`, `tests/test_setup.py` |
+| String layer | One crafted value per corruption, plus clean strings that must stay quiet | built — `tests/test_strings.py` |
 | Fuzz | Random bytes never crash Assay; worst case is a syntax finding | built as a Hypothesis property, not a long-running fuzz campaign |
 | Geographic | Known ZIP/city/state triples (including multi-county ZIPs, city aliases, military and territory addresses) → expected findings; USPS calls mocked with recorded responses, so CI never hits the network | planned with M5–M6 |
 
@@ -469,7 +474,7 @@ The golden snapshot is part of `pytest`, and the Docker build joins CI with M7.
 | M1 | Syntax layer | All 8 detectors plus bracket-stack truncation, with line/col; golden tests pass | **built and tested** |
 | M2 | Schema layer | `iter_errors` mapped to findings with hints and did-you-mean | **built and tested** |
 | M3 | Grouping | Fingerprints, ranking, terminal report; 2,000-payload demo collapses to a handful of groups | **built: 2,000 payloads → 10 groups** |
-| M4 | String + setup layers | ftfy, hidden chars, constant/placeholder smells, YAML rules | planned |
+| M4 | String + setup layers | ftfy, hidden chars, constant/placeholder smells, YAML rules | **built and tested** |
 | M5 | Geographic (offline) | Bundled ZIP DB; ZIP format, ZIP↔state/city/county, PO Box and military checks; batch geo smells | planned |
 | M6 | Geographic (online) | `--verify` with USPS Addresses API, OAuth, caching, rate limiting | planned |
 | M7 | Interfaces | JSON/HTML/SARIF output, `--redact`, FastAPI endpoint, paste-in web UI | JSON + CLI built; HTML/SARIF, redaction, API, UI planned |
@@ -494,3 +499,6 @@ The golden snapshot is part of `pytest`, and the Docker build joins CI with M7.
 | Enforce exit codes in `run()`, not the framework | Let Typer exit for us | Typer turns `Exit` into a normal return off its standalone path, and a usage typo must not look like "errors found" |
 | ASCII fallback for decoration only | Transliterate all non-ASCII output | Curly quotes and zero-width characters are often the bug being reported; flattening them would hide the evidence |
 | One scanner pass, then regexes against string spans | Eight independent scans | A `//` inside a URL or an apostrophe in `O'Brien` must never be blamed for a syntax error |
+| Rules validated at load time, unknown keys rejected | Lenient parsing with defaults | A rule that silently never fires is worse than one that refuses to load; a typo exits 3 |
+| Batch rules observe, then emit | Buffer whole payloads | Streaming memory stays bounded; collectors cap observations so a pathological batch loses a finding, not the process |
+| Correlation skips pairs on the same path | Correlate every pair | Two problems in one field co-occur by construction; saying so is noise |

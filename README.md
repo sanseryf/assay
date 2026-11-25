@@ -6,60 +6,99 @@
 > every error at once, pins each to a path — then groups the findings by root cause, so
 > you fix one mapping instead of reading 4,000 identical failures.
 
-**Status: v0.1 — milestones M1–M3 are built and tested.** That is the syntax layer, the
-schema layer, and grouping. Layers 3–5 (setup rules, string quality, geographic checks)
-and the later interfaces are designed in [`ARCHITECTURE.md`](ARCHITECTURE.md) and marked
-**planned** there. This README describes only what runs today.
+**Status: v0.2 — milestones M1–M4 are built and tested.** Syntax, schema, setup rules
+and string quality all run, with grouped terminal/JSON reports and the 0/1/2/3 exit-code
+contract. The geographic layers (M5–M6), redaction, the API/web UI and HTML/SARIF output
+are designed in [`ARCHITECTURE.md`](ARCHITECTURE.md) and marked **planned** there. This
+README describes only what runs today.
 
 ## The 2,000-payload demo
 
 ```text
-Assay · 2,000 payloads · 265 clean · 1,735 with errors · 193 ms
+Assay · 2,000 payloads · 285 clean · 1,715 with errors · 537 ms
 
  #   IMPACT   LAYER    WHERE                                  PROBLEM                                            RECORDS
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- 1   ██████   schema   members[*].zip                         integer, expected string                             1,660
-                                                              e.g. 78701, 98101, 7030                                   
+ 1   ██████   schema   members[*].zip                         integer, expected string                             1,653
+                                                              e.g. 75071, 7030, 98101                                   
                                                               hint: a number here usually means leading zeros           
                                                               were stripped upstream (07030 became 7030); send          
                                                               the field as a string.                                    
- 2   █        schema   members[*].dob                         not a valid date                                       269
-                                                              e.g. 03/20/1976, 02/10/1963, 06/09/1980                   
+ 2   ███      setup    members[*].source_system               100% of records share one value                      1,994
+                                                              e.g. LEGACY_HR                                            
+                                                              hint: A single source tag on every record is              
+                                                              usually a hard-coded default.                             
+ 3   ██       setup    members[*].zip                         integer here, string elsewhere in the batch          1,653
+                                                              e.g. 75071, 7030, 98101                                   
+                                                              hint: ZIPs are strings in some records and                
+                                                              numbers in others; the leading zero is being              
+                                                              lost.                                                     
+ 4   █        schema   members[*].dob                         not a valid date                                       271
+                                                              e.g. 03/20/1976, 05/19/1997, 10/14/1965                   
                                                               hint: expected date such as YYYY-MM-DD.                   
- 3   █        schema   members[*].coverage_tier               value not in allowed set                                98
+ 5   █        schema   members[*].coverage_tier               value not in allowed set                                94
                                                               e.g. employee, employee_spouse, employee_child            
                                                               hint: allowed values: EMPLOYEE, EMPLOYEE_SPOUSE,          
                                                               EMPLOYEE_CHILD. Did you mean 'EMPLOYEE'?                  
- 4   █        schema   members[*].first_name                  missing required field                                  28
+ 6   █        string   members[*].first_name                  zero-width character U+200B                            110
+                                                              e.g. José​, Müller​, Barbara​                                
+                                                              hint: strip it; it is invisible and breaks                
+                                                              string equality, joins and dedupe.                        
+ 7   █        setup    members[*].coverage_tier               case differs from the rest of the batch                 94
+                                                              e.g. employee_spouse, employee_child, employee            
+                                                              hint: the batch predominantly uses                        
+                                                              'EMPLOYEE_SPOUSE'; make the field consistent.             
+ 8   █        schema   members[*].first_name                  missing required field                                  34
                                                               hint: check the field mapping; a missing field            
                                                               here usually means an empty source column.                
- 5   █        schema   members[*].frist_name                  unknown field                                           28
-                                                              e.g. Alan, Radia, Sophie                                  
+ 9   █        schema   members[*].frist_name                  unknown field                                           34
+                                                              e.g. Müller, Katherine, Renée                             
                                                               hint: unknown field 'frist_name'. Did you mean            
                                                               'first_name'?                                             
- 6   █        schema   members[*].zip                         missing required field                                  18
+10   █        string   members[*].last_name                   leading or trailing whitespace                          65
+                                                              e.g.  Lovelace,  Allen,  Liskov                           
+                                                              hint: trim the value; whitespace breaks                   
+                                                              matching, joins and dedupe.                               
+11   █        schema   members[*].zip                         missing required field                                  12
                                                               hint: check the field mapping; a missing field            
                                                               here usually means an empty source column.                
- 7   █        syntax   examples/demo-batch.ndjson:38:1:209    trailing comma before a closing bracket                  3
-                                                              hint: remove the comma at line 1, column 209.             
- 8   █        syntax   examples/demo-batch.ndjson:205:1:65    curly quote U+201C (left double quotation mark)          2
+12   █        setup    members[*].external_id                 duplicate key in this batch                              6
+                                                              e.g. E-001108, E-001554, E-002048                         
+                                                              hint: The same external id arrived twice; dedupe          
+                                                              or make the write an upsert.                              
+13   █        string   members[*].first_name                  mojibake (UTF-8 decoded as cp1252)                      13
+                                                              e.g. RenÃ©e, SÃ¸ren, JosÃ©                                
+                                                              hint: reads as 'Renée'; re-export the source as           
+                                                              UTF-8 (ftfy repairs this).                                
+14   █        setup    batch_id                               duplicate key                                            4
+                                                              hint: the later value silently wins; remove or            
+                                                              rename the repeated key.                                  
+15   █        setup    members[*].first_name                  placeholder value                                        9
+                                                              e.g. TEST                                                 
+                                                              hint: TEST or N/A in a name field means the               
+                                                              mapping fell back to a placeholder.                       
+16   █        syntax   examples/demo-batch.ndjson:38:1:231    trailing comma before a closing bracket                  3
+                                                              hint: remove the comma at line 1, column 231.             
+17   █        syntax   examples/demo-batch.ndjson:205:1:65    curly quote U+201C (left double quotation mark)          2
                                                               hint: replace “ ” ‘ ’ with straight quotes and            
                                                               re-export as UTF-8; Word, Slack and Notion apply          
                                                               this autocorrect.                                         
- 9   █        syntax   examples/demo-batch.ndjson:1002:1:1    byte-order mark at start of file                         1
+18   █        syntax   examples/demo-batch.ndjson:1002:1:1    byte-order mark at start of file                         1
                                                               hint: strip the BOM; some Windows editors save            
                                                               UTF-8 with one.                                           
-10   █        syntax   examples/demo-batch.ndjson:778:1:271   unclosed string                                          1
-                                                              hint: opened at line 1, column 271; the payload           
+19   █        syntax   examples/demo-batch.ndjson:778:1:118   unclosed string                                          1
+                                                              hint: opened at line 1, column 118; the payload           
                                                               looks cut off. Brackets are still open too.               
 
 correlated · members[*].first_name and members[*].frist_name co-occur in 100% of affected records; likely one upstream 
 cause.
 
-start here · fixing #1 (members[*].zip) clears 2,523 of 2,993 findings (84%).
+start here · fixing #1 (members[*].zip) clears 2,507 of 9,270 findings (27%).
 ```
 
-2,993 findings collapse to ten groups, and one fix clears 84% of them. The full run is
+Nine thousand findings collapse to nineteen groups across four layers: a ZIP sent as a
+number, a date format, a constant source tag, case drift, zero-width characters,
+mojibake, duplicate keys — everything a schema alone would let through. The full run is
 committed as [`examples/demo-report.txt`](examples/demo-report.txt); regenerate it with
 the commands under [Quick start](#quick-start).
 
@@ -76,6 +115,11 @@ Assay answers three questions:
 2. **What is wrong with it?** Every violation at once, each with a path and a fix hint.
 3. **What is the root cause?** Findings clustered and ranked, with sample values.
 
+It also catches the second failure mode: **payloads that are perfectly valid and still
+wrong**. `"7030"` lost its leading zero upstream, `"TEST"` is a placeholder, `"employee"`
+is the wrong case for an enum the schema only checked at one record, and `"Smith\u200b"`
+carries an invisible character that will silently break every later match.
+
 ## Quick start
 
 Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
@@ -85,7 +129,9 @@ uv sync --extra dev
 
 # The demo batch is generated, not committed: 2,000 payloads, a handful of causes.
 uv run python examples/make_demo_batch.py examples/demo-batch.ndjson
-uv run assay check examples/demo-batch.ndjson --schema examples/member.schema.json
+uv run assay check examples/demo-batch.ndjson \
+  --schema examples/member.schema.json \
+  --rules examples/member.rules.yaml
 ```
 
 A single payload, a glob, a directory or stdin works the same way:
@@ -101,6 +147,7 @@ Machine-readable for CI:
 ```bash
 uv run assay check examples/demo-batch.ndjson \
   --schema examples/member.schema.json \
+  --rules examples/member.rules.yaml \
   --format json --output report.json
 ```
 
@@ -111,11 +158,12 @@ uv run assay check examples/demo-batch.ndjson \
 | `0`  | no errors or warnings (informational notes may still be listed) |
 | `1`  | findings, all of them warnings |
 | `2`  | at least one error found |
-| `3`  | Assay could not run: bad schema, unreadable input, invalid command line |
+| `3`  | Assay could not run: bad schema, bad rules, unreadable input, invalid command line |
 
 A schema that fails to compile exits `3` rather than reporting a verdict, because
-nothing was actually checked. A mistyped command line also exits `3`, so a typo can
-never be mistaken for "errors found". Both cases are covered by tests.
+nothing was actually checked. So does a rules file with a typo: a rule that silently
+never fires is worse than one that refuses to load. A mistyped command line also exits
+`3`, so a typo can never be mistaken for "errors found". All of this is covered by tests.
 
 ## What it checks today
 
@@ -161,6 +209,63 @@ Two details matter:
   stripped upstream (07030 became 7030)"; an enum typo gets the closest allowed value; an
   unknown field gets `Did you mean 'first_name'?`.
 
+### Layer 3 — setup rules
+
+Valid JSON that matches the schema can still be wrong. Rules are YAML, validated with
+Pydantic at startup (unknown keys, bad paths, duplicate ids and out-of-range thresholds
+all fail with exit `3`):
+
+```yaml
+version: 1
+duplicate_keys: true
+strings:
+  max_length:
+    "$.members[*].first_name": 40
+rules:
+  - id: dates-ordered
+    kind: compare
+    left: "$.members[*].start_date"
+    op: "<="
+    right: "$.members[*].end_date"
+    severity: error
+    hint: "End date precedes start date. Check the timezone or field mapping."
+```
+
+| Kind | What it catches | Scope |
+| ---- | --------------- | ----- |
+| `compare` | `end_date` before `start_date`; values not comparable are skipped | per payload |
+| `required_if` | `type = "dependent"` but no `relationship` | per payload |
+| `placeholder` | `TEST`, `N/A`, `string`, `xxx`, `0000000000` | per payload |
+| `constant_smell` | a field with the same value on ≥95% of records (an unmapped default) | batch |
+| `case_drift` | the same enum written `Active`, `ACTIVE`, `active` | batch |
+| `duplicate_records` | the same natural key twice in one batch | batch |
+| `type_inconsistency` | `zip` a string in some records, a number in others | batch |
+
+Duplicate keys (`{"id": 1, "id": 2}`) are found during parsing, because `json` silently
+keeps the last value; they are reported as setup findings. Batch checks observe payloads
+as they stream past and emit their findings at the end, with a fixed observation cap so
+a pathological batch loses a finding rather than exhausting memory.
+
+### Layer 4 — string quality
+
+Every string value is checked for damage that passes every schema:
+
+| Check | Example | Why it matters |
+| ----- | ------- | -------------- |
+| mojibake | `JosÃ©` | UTF-8 decoded as cp1252; ftfy shows the repair |
+| zero-width characters | `Smith\u200b` | invisible; breaks equality, joins and dedupe |
+| non-breaking spaces | `New\u00a0York` | looks identical, fails equality |
+| control characters | `bad\u0007name` | truncates logs and downstream fields |
+| leading/trailing whitespace | `" Smith "` | breaks matching and dedupe |
+| double-encoded JSON | `"{\"id\": 1}"` | the payload nests a string where it needs an object |
+| replacement character | `Mu\ufffdoz` | the original character is already lost |
+| mixed scripts | `Vl\u0430dimir` | a Cyrillic `а` inside a Latin name |
+| configured length | first name at 300 chars | the destination will truncate or reject it |
+
+Findings show the invisible: `zero-width character U+200B`. A report that says "bad
+character" next to text that looks fine is useless. These are warnings by default,
+because the payload is well-formed — `1` is the exit code when that is all a batch has.
+
 ## Grouping, and why it is the point
 
 Findings are fingerprinted as `layer:rule:normalized-path:signature`:
@@ -170,16 +275,17 @@ members[0].zip   → schema:type:members[*].zip:type:integer→string
 members[847].zip → schema:type:members[*].zip:type:integer→string
 ```
 
-The fingerprint contains **no values**, which is why 1,660 records collapse into one row
-and sample values (`78701`, `98101`, `7030`) can be listed separately. Groups are ranked
-by impact (affected records × severity weight), ties broken by layer order, so a syntax
-error outranks a schema error of the same size. When two groups always hit the same
-records, the report says so — `first_name` missing and `frist_name` unknown are one
-copy-paste mistake, not two bugs.
+The fingerprint contains **no values**, which is why 1,653 records collapse into one row
+and sample values can be listed separately. Groups are ranked by impact (affected
+records × severity weight), ties broken by layer order, so a syntax error outranks a
+string warning of the same size. When two groups always hit the same records, the report
+says so — `first_name` missing and `frist_name` unknown are one copy-paste mistake, not
+two bugs.
 
 Correlation is Jaccard overlap of the two affected-record sets, computed only for groups
-with at least five affected payloads and only among the top 60 groups, because the
-pairwise step would otherwise be quadratic in a pathological batch.
+with at least five affected payloads, only among the top 60 groups, and only for pairs on
+different paths: two problems in the same field co-occur by construction, so saying so
+would teach the reader nothing.
 
 ## Development
 
@@ -187,7 +293,7 @@ pairwise step would otherwise be quadratic in a pathological batch.
 uv sync --extra dev
 uv run pre-commit install      # ruff + mypy before every commit
 
-uv run pytest                  # 112 tests: unit, golden, CLI, property-based
+uv run pytest                  # unit, golden, CLI and property-based tests
 uv run pytest --cov=assay      # coverage
 uv run ruff check .
 uv run ruff format --check .
@@ -214,6 +320,10 @@ src/assay/
   models.py      Finding, Group, Report; layers and severities
   syntax.py      layer 1: decoding, detectors, one-pass string/bracket scanner
   schema.py      layer 2: jsonschema errors → findings + hints
+  rules.py       layer 3: Pydantic rule config, loaded from YAML
+  setup.py       layer 3: per-payload rules and batch collectors
+  strings.py     layer 4: mojibake, invisible characters, double encoding
+  jsonpath.py    the small JSONPath subset rules are written in
   fingerprint.py path normalization and the fingerprint itself
   grouping.py    collapse, impact ranking, correlation
   pipeline.py    per-payload layer order, batch assembly, size/depth limits
@@ -221,15 +331,16 @@ src/assay/
   report.py      terminal table (Rich) and JSON
   cli.py         Typer app and the exit-code contract
 ARCHITECTURE.md  the full design; unbuilt sections are marked planned
-examples/        member schema, deterministic 2,000-payload generator, sample report
+examples/        schema, rules, deterministic 2,000-payload generator, sample report
 tests/           unit, golden, CLI, property-based, fixtures
 ```
 
 ## Limitations, stated plainly
 
-- Layers 3–5, `--redact`, the HTTP API, the web UI, HTML/SARIF output and the Switchyard
-  stage are **not implemented**. They are milestones M4–M8 in
-  [`ARCHITECTURE.md`](ARCHITECTURE.md).
+- Geographic checks (M5–M6), `--redact`, the HTTP API, the web UI, HTML/SARIF output and
+  the Switchyard stage are **not implemented**. They are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+- Setup rules are the seven kinds above; there is no expression language and no
+  per-rule path exclusions.
 - The full JSON Schema vocabulary is not mapped: keywords outside the list above fall
   back to jsonschema's own message with a generic hint.
 - External `$ref` targets are not resolved; internal references (`#/$defs/...`) work.
