@@ -6,11 +6,11 @@
 > every error at once, pins each to a path — then groups the findings by root cause, so
 > you fix one mapping instead of reading 4,000 identical failures.
 
-**Status: v0.3 — milestones M1–M5 are built and tested.** Syntax, schema, setup rules,
-string quality and offline geography all run, with grouped terminal/JSON reports and the
-0/1/2/3 exit-code contract. Online address verification (M6), redaction, the API/web UI
-and HTML/SARIF output are designed in [`ARCHITECTURE.md`](ARCHITECTURE.md) and marked
-**planned** there. This README describes only what runs today.
+**Status: v1.0 — milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
+string quality, offline geography, USPS verification (opt-in), redaction, HTML/SARIF
+reports, an HTTP API with a paste-in page, and a Docker image. The Switchyard validation
+stage is designed in [`ARCHITECTURE.md`](ARCHITECTURE.md) and marked **planned**; this
+README describes only what runs today.
 
 ## The 2,000-payload demo
 
@@ -189,6 +189,54 @@ nothing was actually checked. So does a rules file with a typo: a rule that sile
 never fires is worse than one that refuses to load. A mistyped command line also exits
 `3`, so a typo can never be mistaken for "errors found". All of this is covered by tests.
 
+### Output formats
+
+`--format` selects the report: `terminal` (the table), `json` (the CI contract), `html`
+(a standalone, escaped page) or `sarif` (2.1.0, for GitHub code scanning).
+
+```bash
+uv run assay check payload.json --schema schema.json --format sarif --output assay.sarif
+uv run assay check payload.json --schema schema.json --format html  --output report.html
+```
+
+### Redaction
+
+`--redact` keeps paths, layers and counts, and replaces values with shape tokens
+(`"J*** S****"`, `"####-##-##"`, `"#####"`). Hints that are *derived* from values — the
+repaired text in a mojibake hint, the standardized address from USPS — are removed
+rather than half-redacted, because a substring scrub cannot know the derived form.
+Fingerprints never contained values, so grouping is unchanged.
+
+### HTTP API and web page
+
+The API is an optional extra, because a CLI user should not install a web framework:
+
+```bash
+uv sync --extra api
+uv run assay serve --port 8000
+```
+
+Open <http://127.0.0.1:8000> for the paste-in page, or call the endpoint directly:
+
+```bash
+curl -s localhost:8000/assay -H 'content-type: application/json' -d '{
+  "payload": {"members": [{"zip": 7030}]},
+  "schema":  {"type": "object"},
+  "redact": true
+}' | jq
+```
+
+`POST /assay` accepts `payload`, `schema`, optional `rules` and `redact`, and returns the
+same `Report` object as `--format json`. `GET /health` returns the version. The service is
+stateless and writes nothing.
+
+### Docker
+
+```bash
+docker build -t assay .
+docker run --rm -v "$PWD:/data" assay check /data/batch.ndjson --schema /data/schema.json
+```
+
 ## What it checks today
 
 ### Layer 1 — syntax
@@ -290,7 +338,7 @@ Findings show the invisible: `zero-width character U+200B`. A report that says "
 character" next to text that looks fine is useless. These are warnings by default,
 because the payload is well-formed — `1` is the exit code when that is all a batch has.
 
-### Layer 5 — geographic (offline)
+### Layer 5 — geographic (offline, plus opt-in USPS verification)
 
 Downstream systems reject records whose ZIP, city and state disagree, or whose "home
 address" is a mailbox. Those payloads pass every schema check, because `"75071"`,
@@ -339,8 +387,26 @@ uv run python -m assay.geo.build \
   --census tab20_zcta520_county20_natl.txt
 ```
 
-Attribution and known gaps are in [`NOTICE.md`](NOTICE.md). Street-level validity and
-deliverability need the USPS Addresses API, which is milestone M6 and **not built**.
+Attribution and known gaps are in [`NOTICE.md`](NOTICE.md).
+
+**Street-level verification is opt-in** (`--verify`, or `geo.verify.enabled: true`)
+because it sends address fields to the USPS Addresses API v3:
+
+- credentials come from `USPS_CLIENT_ID` / `USPS_CLIENT_SECRET` in the environment, never
+  from the rules file; without them the run exits `3` and names the variables
+- every result — including "no match" — is cached by normalized-address hash in
+  `~/.cache/assay/usps-verification.sqlite` (TTL configurable, `ASSAY_CACHE_DIR`
+  overrides the location)
+- requests are throttled to `max_requests_per_minute`
+- a USPS standardization is a warning naming the corrected address, a non-match or DPV
+  failure is an error, and an API outage is a warning — never a crash
+- the tests use recorded mock responses, so CI never calls the network. Live behaviour
+  depends on your USPS credentials.
+
+```bash
+USPS_CLIENT_ID=... USPS_CLIENT_SECRET=... uv run assay check payload.json \
+  --schema schema.json --rules geo.rules.yaml --verify
+```
 
 ## Grouping, and why it is the point
 
@@ -400,28 +466,34 @@ src/assay/
   setup.py       layer 3: per-payload rules and batch collectors
   strings.py     layer 4: mojibake, invisible characters, double encoding
   geo/           layer 5: bundled ZIP database, builder and address checks
+  geo/verify.py  opt-in USPS Addresses API client: OAuth, cache, throttle
   jsonpath.py    the small JSONPath subset rules are written in
   fingerprint.py path normalization and the fingerprint itself
   grouping.py    collapse, impact ranking, correlation
   pipeline.py    per-payload layer order, batch assembly, size/depth limits
   loader.py      files, globs, directories, NDJSON, stdin
   report.py      terminal table (Rich) and JSON
+  formats.py     standalone HTML and SARIF 2.1.0
+  redact.py      shape tokens and value scrubbing for --redact
+  api.py         FastAPI endpoint and paste-in page
   cli.py         Typer app and the exit-code contract
 ARCHITECTURE.md  the full design; unbuilt sections are marked planned
 NOTICE.md        attribution for the bundled GeoNames and Census data
+Dockerfile       python:3.12-slim image with the CLI on the entry point
 examples/        schema, rules, deterministic 2,000-payload generator, sample reports
-tests/           unit, golden, CLI, property-based, fixtures
+tests/           unit, golden, CLI, property-based, API, fixtures
 ```
 
 ## Limitations, stated plainly
 
-- **Online address verification (M6)** is not implemented: no USPS API calls, no
-  street-level deliverability. Offline geography checks that ZIP, city, state and
-  county agree, not that a building exists.
+- **USPS verification is tested against mocked responses**, not against the live API in
+  this repository's CI. Live behaviour depends on your credentials and USPS availability.
+- **The Switchyard validation stage (M8) is not implemented.** Everything else in the
+  milestone table ships; see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - PO-box-only and "unique" ZIP types are not known without USPS-licensed data, so a
   residential check catches a written PO Box but not a ZIP that only serves them.
-- `--redact`, the HTTP API, the web UI, HTML/SARIF output and the Switchyard stage are
-  **not implemented**. They are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+- Redaction shapes values and scrubs them from hints, but it is not a guarantee about
+  third-party logs: do not run `--verify` with redaction if USPS must not see addresses.
 - Setup rules are the seven kinds above; there is no expression language and no
   per-rule path exclusions.
 - The full JSON Schema vocabulary is not mapped: keywords outside the list above fall

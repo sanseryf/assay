@@ -4,6 +4,45 @@ All notable changes to Assay are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] — 2026-11-24
+
+Milestones M6 and M7: opt-in USPS verification, and every interface the design called
+for. Assay is feature-complete against the architecture document; the Switchyard stage
+(M8) is a separate project.
+
+### Added
+
+- **USPS Addresses API v3 (M6).** `--verify` (or `geo.verify.enabled`) asks USPS whether
+  an address is real:
+  - OAuth client-credentials token, from `USPS_CLIENT_ID` / `USPS_CLIENT_SECRET` in the
+    environment only; missing credentials exit `3` with the variable names
+  - every result, including "no match", cached by normalized-address hash
+    (`~/.cache/assay/usps-verification.sqlite`, TTL configurable, `ASSAY_CACHE_DIR`
+    overrides the location)
+  - requests throttled to the configured rate
+  - findings for a standardized address (warning naming the USPS form), a non-match or
+    DPV failure (error), and an API failure (warning — never a crash)
+  - tests use mocked USPS responses; CI never calls the network
+- **Redaction (M7).** `--redact` replaces values with shape tokens in previews and
+  samples and scrubs them from hints; hints derived from a value (repaired mojibake, a
+  standardized address) are removed instead of half-redacted. Fingerprints never held
+  values, so grouping is unchanged.
+- **HTML and SARIF output (M7).** `--format html` writes a standalone escaped page;
+  `--format sarif` writes SARIF 2.1.0 with one result per group, for GitHub code scanning.
+- **HTTP API and paste-in page (M7).** Optional `api` extra: `assay serve` runs FastAPI
+  with `POST /assay` (`payload`, `schema`, optional `rules`, `redact`), `GET /` for a
+  no-build web page, and `GET /health`. Stateless; nothing is written.
+- **Docker (M7).** A `python:3.12-slim` image with the CLI on the entry point, plus a CI
+  job that builds it and smoke-tests `--version`.
+- **Version 1.0.0.** README, architecture document and this changelog now describe the
+  completed surface; only Switchyard (M8) remains planned.
+
+### Quality
+
+- 259 tests, 91% coverage, `ruff` and `mypy --strict` clean.
+- CI: ruff, format check, mypy, pytest with the coverage gate on 3.11 and 3.12, then the
+  Docker build.
+
 ## [0.3.0] — 2026-11-24
 
 Milestone M5: offline geography. The layer that catches addresses which are valid JSON,

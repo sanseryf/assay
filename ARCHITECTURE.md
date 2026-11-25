@@ -2,19 +2,18 @@
 
 > A JSON payload error identifier. Assay takes one payload or ten thousand, runs them through layered checks (syntax, schema, setup rules, string quality, and geographic validation), then **groups every error by root cause** so you fix one mapping instead of reading 4,000 identical failures.
 
-> **Implementation status (v0.3).** This document is the target design. **Milestones
-> M1–M5 are built, tested and shipped:** syntax, schema, setup rules, string quality,
-> offline geography and grouping, with terminal/JSON reports and a 0/1/2/3 exit-code
-> contract. Online address verification (M6), redaction, the API and web UI, HTML/SARIF
-> output and the Switchyard stage are marked **planned** below. The README describes
-> only what runs today.
+> **Implementation status (v1.0).** This document is the target design. **Milestones
+> M1–M7 are built, tested and shipped:** syntax, schema, setup rules, string quality,
+> offline geography, opt-in USPS verification, grouping, redaction, HTML/SARIF, the HTTP
+> API with a paste-in page, and Docker. The Switchyard validation stage (M8) is marked
+> **planned** below. The README describes only what runs today.
 
 **Stack today:** Python 3.11+ · jsonschema (Draft 2020-12) · ftfy · PyYAML · Pydantic ·
-usaddress · SQLite (bundled ZIP reference) · Typer (CLI) · Rich (terminal reports) ·
-pytest + Hypothesis · GitHub Actions (ruff → mypy --strict → pytest)
+usaddress · SQLite (bundled ZIP reference and USPS cache) · USPS Addresses API v3 (opt-in) ·
+Typer (CLI) · Rich (terminal reports) · FastAPI + uvicorn (optional API and web page) ·
+pytest + Hypothesis · Docker · GitHub Actions (ruff → mypy --strict → pytest → docker)
 
-**Stack planned:** USPS Addresses API (M6) · FastAPI + web UI (M7) · Docker (M7) ·
-Switchyard integration (M8)
+**Stack planned:** Switchyard integration (M8)
 
 ---
 
@@ -182,7 +181,7 @@ Assay walks every string value and checks it for corruption that passes every sc
 
 Findings show the invisible: `"Smith⟨U+200B⟩"` with the codepoint spelled out, because a report that says "bad character" next to text that looks fine is useless.
 
-### Layer 5: Geographic — **offline built (M5); online planned (M6)**
+### Layer 5: Geographic — **offline built (M5); USPS verification built, opt-in (M6)**
 
 Downstream systems (insurers, payroll, tax, shipping) routinely reject records whose ZIP, city and state don't agree, or whose "home address" isn't a physical residence. These pass every schema check, because `"75071"`, `"Dallas"` and `"OK"` are each perfectly valid strings. Layer 5 checks that they agree with each other and with reality.
 
@@ -404,9 +403,12 @@ Assay · 2,000 payloads · 1,766 clean · 234 with errors · 412 ms
  6  █       syntax  payload_0441.json:12:5   trailing comma                       1
 ```
 
-### API and Switchyard integration — **planned (M7–M8)**
+### API and Switchyard integration — **API built (M7); Switchyard planned (M8)**
 
-`POST /assay` with `{payload, schema_id, rules_id}` returns a `Report`. As a **Switchyard validation stage**, failing payloads go to the dead-letter queue *with the grouped report attached*, so the DLQ explains itself.
+`POST /assay` with `{payload, schema, rules?, redact?}` returns a `Report`; `GET /` serves
+the paste-in page, and `GET /health` reports the version. The client from the original
+design — *failing payloads go to the dead-letter queue with the grouped report attached* —
+is what the Switchyard stage will do with it (M8, not built):
 
 ```mermaid
 sequenceDiagram
@@ -430,8 +432,8 @@ sequenceDiagram
 
 ## 7. Privacy and safety
 
-- **Planned (M7):** `--redact` replaces values with shape tokens (`"J*** S****"`, `"####-##-##"`) while keeping paths, types and signatures intact. Grouping will still work because fingerprints never include raw values.
-- The CLI persists nothing: the report is the only output. **Planned (M7):** the API is stateless unless storage is explicitly enabled.
+- **Built (M7):** `--redact` replaces values with shape tokens (`"J*** S****"`, `"####-##-##"`) while keeping paths, types and signatures intact. Grouping still works because fingerprints never include raw values. Hints that are derived from a value (the repaired text in a mojibake hint, a USPS standardized address) are removed rather than half-redacted.
+- The CLI and API persist nothing: the report is the only output.
 - Input size and nesting-depth limits stop pathological payloads (billion-laughs-style nesting) from exhausting memory. **Built:** `--max-bytes` and `--max-depth`.
 
 ---
@@ -464,7 +466,8 @@ for very large batches, and groups merged across workers by fingerprint.
 | String layer | One crafted value per corruption, plus clean strings that must stay quiet | built — `tests/test_strings.py` |
 | Geographic (offline) | ZIP/city/state/county triples, military ZIPs, PO boxes, street numbers and batch smells, against a fixture database built from the same builder | built — `tests/test_geo_build.py`, `tests/test_geo_checks.py` |
 | Fuzz | Random bytes never crash Assay; worst case is a syntax finding | built as a Hypothesis property, not a long-running fuzz campaign |
-| Geographic (online) | USPS calls mocked with recorded responses, so CI never hits the network | planned with M6 |
+| Geographic (online) | USPS calls mocked with recorded responses, so CI never hits the network | built — `tests/test_verify.py`; live calls need credentials |
+| Interfaces | API endpoint, paste-in page, HTML/SARIF output and redaction | built — `tests/test_api.py`, `tests/test_formats.py`, `tests/test_redact.py` |
 
 CI: `ruff` → `mypy --strict` → `pytest` with a coverage gate, on Python 3.11 and 3.12.
 The golden snapshot is part of `pytest`, and the Docker build joins CI with M7.
@@ -480,8 +483,8 @@ The golden snapshot is part of `pytest`, and the Docker build joins CI with M7.
 | M3 | Grouping | Fingerprints, ranking, terminal report; 2,000-payload demo collapses to a handful of groups | **built: 2,000 payloads → 10 groups** |
 | M4 | String + setup layers | ftfy, hidden chars, constant/placeholder smells, YAML rules | **built and tested** |
 | M5 | Geographic (offline) | Bundled ZIP DB; ZIP format, ZIP↔state/city/county, PO Box and military checks; batch geo smells | **built and tested** |
-| M6 | Geographic (online) | `--verify` with USPS Addresses API, OAuth, caching, rate limiting | planned |
-| M7 | Interfaces | JSON/HTML/SARIF output, `--redact`, FastAPI endpoint, paste-in web UI | JSON + CLI built; HTML/SARIF, redaction, API, UI planned |
+| M6 | Geographic (online) | `--verify` with USPS Addresses API, OAuth, caching, rate limiting | **built; live calls need credentials** |
+| M7 | Interfaces | JSON/HTML/SARIF output, `--redact`, FastAPI endpoint, paste-in web UI | **built** |
 | M8 | Switchyard stage | DLQ entries carry grouped reports | planned |
 
 ---
@@ -509,3 +512,7 @@ The golden snapshot is part of `pytest`, and the Docker build joins CI with M7.
 | ZIP reference bundled as SQLite | Call a geocoding API | Most rejections are local disagreements a table settles instantly; no network, no PII leaving the machine, no rate limits in CI |
 | GeoNames + Census, not USPS-licensed data | Buy a commercial ZIP database | The two public sources cover ZIP, state, city and county ratios; the gaps (PO-box-only and unique ZIP types) are documented instead of guessed |
 | Military ZIPs recognised by range | Require a table of APO/FPO ZIPs | The ranges are stable and the alternative is a USPS licence for a dozen lines of code |
+| USPS credentials from the environment only | Put them in the rules file | A token in a committed YAML file is a leaked token; the environment is the boundary |
+| Verification results cached, including misses | Call USPS every run | Addresses repeat across retries and batches; a miss is still an answer and costs the same rate budget |
+| Redaction drops derived hints | Attempt to scrub every hint | A repaired spelling or standardized address is not a substring of the input; removing the hint is honest, half-redacting it is not |
+| SARIF emits one result per group | One result per finding | Code scanning is for humans; 4,000 identical results is the problem Assay exists to solve |
