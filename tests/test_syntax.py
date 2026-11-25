@@ -115,12 +115,6 @@ def test_smart_quotes_inside_a_quoted_string_are_content_not_syntax() -> None:
     assert "smart-quotes" not in rules(result)
 
 
-def test_deep_nesting_is_reported_not_raised() -> None:
-    result = analyze(b"[" * 3000 + b"]" * 3000, "p1")
-    assert not result.ok
-    assert "input-too-deep" in rules(result)
-
-
 def test_bom_constant_is_the_character_not_the_mojibake() -> None:
     assert BOM == "\ufeff"
     assert analyze(BOM.encode() + b"{}", "p1").ok

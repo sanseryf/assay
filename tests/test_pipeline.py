@@ -78,6 +78,17 @@ def test_too_deep_payload_is_reported() -> None:
     assert report.groups[0].rule == "input-too-deep"
 
 
+def test_extreme_nesting_is_reported_not_raised() -> None:
+    """Whether the parser or the depth guard catches it depends on the platform.
+
+    CPython's C scanner handles 3,000 levels on Linux and raises RecursionError on
+    Windows; both paths must end in an ``input-too-deep`` finding, never a crash.
+    """
+    document = "[" * 3000 + "]" * 3000
+    report = Pipeline(schema=None).run([payload(document, "deep")])
+    assert report.groups[0].rule == "input-too-deep"
+
+
 def test_max_depth_counts_containers() -> None:
     assert max_depth("scalar") == 1
     assert max_depth({"a": [{"b": 1}]}) == 4
