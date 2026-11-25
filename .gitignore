@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+pip-wheel-metadata/
+pip-build-env-*/
+pip-install-*/
+pip-unpack-*/
+pip-metadata-*/
+pip-ephem-wheel-cache-*/
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.pre-commit-home/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+pytest-of-*/
+
+# Generated demo data (see examples/make_demo_batch.py)
+examples/demo-batch.ndjson
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
