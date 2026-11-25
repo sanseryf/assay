@@ -3,19 +3,26 @@
 A syntax failure stops later layers for *that payload only*; the batch keeps going.
 Findings from every payload flow into one stream, which is then grouped, so the
 report describes the batch rather than repeating itself per record.
+
+Three layers run per payload (syntax, schema, setup, string). Setup rules that are
+properties of the batch — constants, case drift, duplicates, type drift — observe
+payloads as they pass and emit their findings at the end.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .grouping import group_findings
 from .loader import Payload
 from .models import Finding, Layer, Report, Severity
+from .rules import RulesConfig
 from .schema import SchemaLayer
+from .setup import SetupLayer
+from .strings import check as check_strings
 from .syntax import analyze
 
 DEFAULT_MAX_BYTES = 32 * 1024 * 1024
@@ -30,60 +37,78 @@ class Limits:
     max_depth: int = DEFAULT_MAX_DEPTH
 
 
+@dataclass(slots=True)
+class PayloadCheck:
+    """What one payload produced, plus the document for batch-level rules."""
+
+    findings: list[Finding] = field(default_factory=list)
+    document: Any = None
+
+
 class Pipeline:
-    """Run the implemented layers (syntax, schema) and group the findings."""
+    """Run the implemented layers and group the findings."""
 
     def __init__(
         self,
         *,
         schema: dict[str, Any] | None = None,
         schema_id: str = "schema",
+        rules: RulesConfig | None = None,
         limits: Limits | None = None,
     ) -> None:
         self.schema_layer = SchemaLayer(schema, schema_id=schema_id) if schema is not None else None
+        self.rules = rules or RulesConfig()
         self.limits = limits or Limits()
 
     def run(self, payloads: Iterable[Payload]) -> Report:
         """Check every payload, then group the batch."""
         started = time.perf_counter()
+        setup = SetupLayer(self.rules)
         findings: list[Finding] = []
         scanned = clean = 0
 
         for payload in payloads:
             scanned += 1
-            payload_findings = self.check_one(payload)
-            if payload_findings:
-                findings.extend(payload_findings)
+            checked = self._check_one(payload, setup)
+            if checked.findings:
+                findings.extend(checked.findings)
             else:
                 clean += 1
+            if checked.document is not None:
+                setup.observe(checked.document, payload.payload_id)
 
-        report = Report(
+        findings.extend(setup.finalize())
+        return Report(
             payloads_scanned=scanned,
             payloads_clean=clean,
             groups=group_findings(findings),
             duration_ms=int((time.perf_counter() - started) * 1000),
         )
-        return report
 
     def check_one(self, payload: Payload) -> list[Finding]:
-        """Everything wrong with one payload, in layer order."""
+        """Everything wrong with one payload, ignoring batch-level rules."""
+        return self._check_one(payload, SetupLayer(self.rules)).findings
+
+    def _check_one(self, payload: Payload, setup: SetupLayer) -> PayloadCheck:
         if payload.oversized:
-            return [
-                Finding(
-                    layer=Layer.SYNTAX,
-                    rule="input-too-large",
-                    severity=Severity.ERROR,
-                    path="$",
-                    message=f"payload exceeds {self.limits.max_bytes:,} bytes",
-                    hint="split the file into NDJSON records, or raise --max-bytes deliberately.",
-                    payload_id=payload.payload_id,
-                )
-            ]
+            return PayloadCheck(
+                [
+                    Finding(
+                        layer=Layer.SYNTAX,
+                        rule="input-too-large",
+                        severity=Severity.ERROR,
+                        path="$",
+                        message=f"payload exceeds {self.limits.max_bytes:,} bytes",
+                        hint="split the file into NDJSON records, or raise --max-bytes deliberately.",
+                        payload_id=payload.payload_id,
+                    )
+                ]
+            )
 
         result = analyze(payload.raw, payload.payload_id)
         findings = list(result.findings)
         if not result.ok:
-            return findings
+            return PayloadCheck(findings)
 
         depth = max_depth(result.document)
         if depth > self.limits.max_depth:
@@ -98,11 +123,22 @@ class Pipeline:
                     payload_id=payload.payload_id,
                 )
             )
-            return findings
+            return PayloadCheck(findings)
 
         if self.schema_layer is not None:
             findings.extend(self.schema_layer.check(result.document, payload.payload_id))
-        return findings
+
+        findings.extend(setup.duplicate_key_findings(payload.payload_id, result.duplicate_keys))
+        findings.extend(setup.check(result.document, payload.payload_id))
+        if self.rules.strings.enabled:
+            findings.extend(
+                check_strings(
+                    result.document,
+                    payload.payload_id,
+                    max_length=self.rules.strings.max_length,
+                )
+            )
+        return PayloadCheck(findings, result.document)
 
 
 def max_depth(value: Any) -> int:
@@ -124,7 +160,8 @@ def check_payloads(
     *,
     schema: dict[str, Any] | None = None,
     schema_id: str = "schema",
+    rules: RulesConfig | None = None,
     limits: Limits | None = None,
 ) -> Report:
     """Convenience wrapper for programmatic use and tests."""
-    return Pipeline(schema=schema, schema_id=schema_id, limits=limits).run(payloads)
+    return Pipeline(schema=schema, schema_id=schema_id, rules=rules, limits=limits).run(payloads)

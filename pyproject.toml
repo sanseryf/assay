@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "assay"
-version = "0.1.0"
+version = "0.2.0"
 description = "JSON payload error identifier: every error, pinned to a path, grouped by root cause"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,6 +22,9 @@ dependencies = [
     "jsonschema[format]>=4.22",
     "typer>=0.29",
     "rich>=13.7",
+    "ftfy>=6.3.1",
+    "pyyaml>=6.0.4",
+    "pydantic>=2.14.4",
 ]
 
 [project.optional-dependencies]
@@ -63,7 +66,7 @@ mypy_path = "src"
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["jsonschema.*", "click.*"]
+module = ["jsonschema.*", "click.*", "ftfy.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -74,3 +77,8 @@ addopts = "-q"
 [tool.coverage.run]
 source = ["assay"]
 branch = true
+
+[dependency-groups]
+dev = [
+    "types-pyyaml>=6.0.12.20261122",
+]

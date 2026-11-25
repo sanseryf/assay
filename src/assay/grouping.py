@@ -14,7 +14,7 @@ from .fingerprint import fingerprint, normalize_path
 from .models import Finding, Group
 
 # Two groups whose affected-record sets overlap this much are reported together.
-CORRELATION_THRESHOLD = 0.8
+CORRELATION_THRESHOLD = 0.9
 
 # Fliers are noise, so correlation needs enough records to mean anything.
 CORRELATION_MIN_PAYLOADS = 5
@@ -87,6 +87,10 @@ def correlate_groups(
             continue
         for right in candidates[index + 1 :]:
             if right.payloads_affected < min_payloads:
+                continue
+            if right.path == left.path:
+                # Same field, different problem. Saying the two co-occur would be
+                # true for every pair and teach the reader nothing.
                 continue
             union = len(left.payload_ids | right.payload_ids)
             if not union:

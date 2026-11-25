@@ -6,7 +6,7 @@ report prints them under a ``WHERE`` column and the dollar sign is noise there.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 Part = str | int
 
@@ -29,3 +29,14 @@ def join(parent: str, field: str) -> str:
     if parent in {"$", ""}:
         return field
     return f"{parent}.{field}"
+
+
+def walk(value: object, parts: tuple[Part, ...] = ()) -> Iterator[tuple[str, object]]:
+    """Yield ``(path, value)`` for every node, depth first, root included."""
+    yield format_path(parts), value
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield from walk(child, (*parts, str(key)))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from walk(child, (*parts, index))

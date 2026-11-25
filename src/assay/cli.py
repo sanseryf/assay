@@ -35,6 +35,7 @@ from . import __version__
 from .loader import InputError, read_payloads
 from .pipeline import DEFAULT_MAX_BYTES, DEFAULT_MAX_DEPTH, Limits, Pipeline
 from .report import print_report, to_json, to_text
+from .rules import ConfigError, RulesConfig, load_config
 
 app = typer.Typer(
     add_completion=False,
@@ -99,6 +100,15 @@ def check(
         readable=True,
         help="JSON Schema (Draft 2020-12) to validate against.",
     ),
+    rules: Path | None = typer.Option(
+        None,
+        "--rules",
+        "-r",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="YAML rules for setup checks, string limits and batch smells.",
+    ),
     output_format: str = typer.Option(
         "terminal",
         "--format",
@@ -136,10 +146,17 @@ def check(
         _fail(f"unknown --format {output_format!r}; expected terminal or json")
 
     schema_document = _load_schema(schema)
+    rules_config = RulesConfig()
+    if rules is not None:
+        try:
+            rules_config = load_config(rules)
+        except ConfigError as exc:
+            _fail(str(exc))
     try:
         pipeline = Pipeline(
             schema=schema_document,
             schema_id=str(schema),
+            rules=rules_config,
             limits=Limits(max_bytes=max_bytes, max_depth=max_depth),
         )
     except SchemaError as exc:

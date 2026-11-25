@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .models import Finding, Layer, Severity
+from .paths import join, walk
 
 BOM = "\ufeff"
 
@@ -47,6 +48,25 @@ def _reject_constant(token: str) -> Any:
     raise _NonFinite(token)
 
 
+class _DuplicateDict(dict[str, Any]):
+    """A dict that remembers which keys it was given twice.
+
+    ``json`` keeps the last value for a repeated key without saying anything. A
+    mapping that sends two values for one field is a bug worth reporting, so the
+    parser hook records the collision and the tree is walked for markers afterwards.
+    """
+
+    __slots__ = ("duplicates",)
+
+    def __init__(self, pairs: list[tuple[str, Any]]) -> None:
+        super().__init__()
+        self.duplicates: list[str] = []
+        for key, value in pairs:
+            if key in self:
+                self.duplicates.append(key)
+            self[key] = value
+
+
 @dataclass(slots=True)
 class SyntaxResult:
     """What the syntax layer could make of one payload.
@@ -60,6 +80,7 @@ class SyntaxResult:
     text: str | None = None
     document: Any = None
     ok: bool = False
+    duplicate_keys: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -96,7 +117,11 @@ def analyze(raw: bytes, payload_id: str = "") -> SyntaxResult:
         text = text[len(BOM) :]
 
     try:
-        document = json.loads(text, parse_constant=_reject_constant)
+        document = json.loads(
+            text,
+            parse_constant=_reject_constant,
+            object_pairs_hook=_DuplicateDict,
+        )
     except _NonFinite as exc:
         match = _outside(_NON_FINITE, text, _scan(text).spans)
         pos = match.start() if match else None
@@ -126,7 +151,13 @@ def analyze(raw: bytes, payload_id: str = "") -> SyntaxResult:
         )
         return SyntaxResult(findings=findings, text=text, ok=False)
 
-    return SyntaxResult(findings=findings, text=text, document=document, ok=True)
+    return SyntaxResult(
+        findings=findings,
+        text=text,
+        document=document,
+        ok=True,
+        duplicate_keys=_duplicates_in(document),
+    )
 
 
 def _decode(raw: bytes, payload_id: str) -> tuple[str | None, Finding | None]:
@@ -352,6 +383,16 @@ def _inside(pos: int, spans: list[tuple[int, int]]) -> bool:
         return False
     index = bisect_right(spans, (pos,)) - 1
     return index >= 0 and spans[index][1] > pos
+
+
+def _duplicates_in(document: Any) -> list[tuple[str, str]]:
+    """``(finding_path, key)`` for every repeated key in a parsed document."""
+    found: list[tuple[str, str]] = []
+    for path, value in walk(document):
+        if isinstance(value, _DuplicateDict):
+            for key in value.duplicates:
+                found.append((join(path, key), key))
+    return found
 
 
 def _line_col(text: str, pos: int) -> tuple[int, int]:
