@@ -1,0 +1,6 @@
+# Text files are LF everywhere: the golden report snapshot and the syntax fixtures
+# encode exact byte offsets, and CRLF conversion would silently move them.
+* text=auto eol=lf
+
+# Fixtures are deliberately byte-exact (BOM, cp1252 bytes, truncated text).
+tests/fixtures/** -text
