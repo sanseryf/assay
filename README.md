@@ -6,14 +6,16 @@
 > every error at once, pins each finding to a path, and groups the findings by root cause.
 > You fix one mapping instead of reading 4,000 identical failures.
 
-**Status: v1.1. Milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
+**Status: v1.2. Milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
 string quality, offline geography, USPS verification (opt-in), redaction, HTML/SARIF
 reports, a web UI, an HTTP API, and a Docker image. The Switchyard validation
 stage (M8) lives in the separate **Switchyard** project: signed ingest, routing, retries,
 and a DLQ that stores Assay's grouped report. This README covers only what runs in this
 repository.
 
-![Assay web UI](docs/ui.png)
+![Assay web UI at night](docs/ui.png)
+
+The masthead toggle switches to a warm parchment day scheme and remembers the choice.
 
 ## The 2,000-payload demo
 
@@ -239,6 +241,11 @@ curl -s localhost:8000/assay -H 'content-type: application/json' -d '{
 
 `GET /health` returns the version. The service is stateless and writes nothing. Batches
 are capped at 2,000 payloads and 10 MB per request.
+
+The interface has two schemes: a near-black forest night and a warm parchment day,
+toggled in the masthead and remembered in `localStorage`. Type is self-hosted:
+Fraunces for display, Inter for UI and JetBrains Mono for paths and values. There are no
+external assets and no CDN.
 
 ### Docker
 
@@ -488,6 +495,7 @@ src/assay/
   api.py         FastAPI app: the web UI routes, batch endpoint and single-payload API
   templates/     the HTML shell for the web UI
   static/        the UI stylesheet and script, served from /static
+  static/fonts/  self-hosted Fraunces, Inter and JetBrains Mono, with OFL licenses
   cli.py         Typer app and the exit-code contract
 ARCHITECTURE.md  the full design; unbuilt sections are marked planned
 NOTICE.md        attribution for the bundled GeoNames and Census data

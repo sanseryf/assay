@@ -4,6 +4,28 @@ All notable changes to Assay are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-11-26
+
+### Changed
+
+- **New visual system.** The UI now matches the rest of the tooling: near-black forest
+  night and warm parchment day, bronze as the only functional accent, a green aurora
+  atmosphere, and serif display type. Tokens cover both schemes, so no component needs a
+  second rule set.
+- Masthead rebuilt with a monogram, an eyebrow label and a sun/moon toggle. The choice is
+  applied before paint by an inline script, persisted in `localStorage`, and reflected in
+  `<meta name="theme-color">`.
+- Panels, stat cards, group cards, chips, inputs and buttons restyled. Report groups rise
+  in with a short stagger; `prefers-reduced-motion` disables it. The input column sticks
+  on desktop so the report can scroll on its own.
+- The status line now reads `<1 ms` instead of `0 ms` for fast runs.
+
+### Added
+
+- Self-hosted variable fonts: Fraunces, Inter and JetBrains Mono, with their SIL Open
+  Font License files, in `static/fonts`. No external asset or CDN.
+- A `?theme=day` preview parameter and a `?still=1` capture mode that disables motion.
+
 ## [1.1.0] - 2026-11-26
 
 ### Added
