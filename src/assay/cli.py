@@ -36,10 +36,11 @@ from .formats import to_html, to_sarif
 from .geo.store import GeoDataError
 from .geo.verify import VerificationError
 from .loader import InputError, read_payloads
-from .models import Report
+from .models import Group, Report
 from .pipeline import DEFAULT_MAX_BYTES, DEFAULT_MAX_DEPTH, Limits, Pipeline
 from .report import print_report, to_json, to_text
 from .rules import ConfigError, RulesConfig, load_config
+from .tickets import build_ticket, render
 
 app = typer.Typer(
     add_completion=False,
@@ -48,6 +49,7 @@ app = typer.Typer(
 )
 
 FORMATS = ("terminal", "json", "html", "sarif")
+TICKET_FORMATS = ("markdown", "jira", "adf", "json")
 
 
 class _Status(Exception):
@@ -246,6 +248,195 @@ def _emit(text: str) -> None:
     except UnicodeEncodeError:  # e.g. cp1252 stdout with a non-Latin sample value
         sys.stdout.buffer.write((text + "\n").encode("utf-8"))
         sys.stdout.flush()
+
+
+@app.command()
+def ticket(
+    paths: list[str] = typer.Argument(
+        ...,
+        metavar="PATHS",
+        help="JSON files, NDJSON batches, globs, directories, or - for stdin.",
+    ),
+    schema: Path = typer.Option(
+        ...,
+        "--schema",
+        "-s",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="JSON Schema (Draft 2020-12) to validate against.",
+    ),
+    rules: Path | None = typer.Option(
+        None,
+        "--rules",
+        "-r",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="YAML rules for setup checks, string limits and batch smells.",
+    ),
+    group: str = typer.Option(
+        "1",
+        "--group",
+        "-g",
+        help="1-based group number, or a fingerprint.",
+    ),
+    output_format: str = typer.Option(
+        "markdown",
+        "--format",
+        "-f",
+        help="Ticket format: markdown, jira, adf or json.",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write the ticket to a file instead of stdout.",
+    ),
+    redact: bool = typer.Option(
+        True,
+        "--redact/--no-redact",
+        help="Redact values in the ticket. On by default.",
+    ),
+    push: bool = typer.Option(
+        False,
+        "--push",
+        help="Create the Jira issue, or comment on the one with this label.",
+    ),
+    jira_url: str | None = typer.Option(
+        None,
+        "--jira-url",
+        envvar="JIRA_URL",
+        help="Jira Cloud base URL, for example https://team.atlassian.net.",
+    ),
+    jira_email: str | None = typer.Option(
+        None,
+        "--jira-email",
+        envvar="JIRA_EMAIL",
+        help="Atlassian account email.",
+    ),
+    jira_token: str | None = typer.Option(
+        None,
+        "--jira-token",
+        envvar="JIRA_API_TOKEN",
+        help="API token. Prefer the JIRA_API_TOKEN environment variable.",
+    ),
+    project: str | None = typer.Option(
+        None,
+        "--project",
+        envvar="JIRA_PROJECT",
+        help="Jira project key.",
+    ),
+    issue_type: str = typer.Option(
+        "Bug",
+        "--issue-type",
+        envvar="JIRA_ISSUE_TYPE",
+        help="Jira issue type name.",
+    ),
+    max_bytes: int = typer.Option(
+        DEFAULT_MAX_BYTES,
+        "--max-bytes",
+        help="Reject payloads larger than this many bytes.",
+    ),
+    max_depth: int = typer.Option(
+        DEFAULT_MAX_DEPTH,
+        "--max-depth",
+        min=1,
+        help="Reject payloads nested deeper than this.",
+    ),
+) -> None:
+    """Build a minimal, redacted ticket for one report group.
+
+    With ``--push`` the ticket is created in Jira Cloud, or added as a comment when an
+    issue already carries the group's label. Credentials are read from the environment
+    and never written to disk.
+    """
+    target_format = output_format.lower().strip()
+    if target_format not in TICKET_FORMATS:
+        _fail(f"unknown --format {output_format!r}; expected markdown, jira, adf or json")
+
+    schema_document = _load_schema(schema)
+    rules_config = RulesConfig()
+    if rules is not None:
+        try:
+            rules_config = load_config(rules)
+        except ConfigError as exc:
+            _fail(str(exc))
+    try:
+        pipeline = Pipeline(
+            schema=schema_document,
+            schema_id=str(schema),
+            rules=rules_config,
+            limits=Limits(max_bytes=max_bytes, max_depth=max_depth),
+            redact=True,
+        )
+    except SchemaError as exc:
+        _fail(f"invalid schema {schema}: {exc.message}")
+    except GeoDataError as exc:
+        _fail(str(exc))
+    except VerificationError as exc:
+        _fail(str(exc))
+
+    try:
+        payloads = list(read_payloads(paths, max_bytes=max_bytes))
+        report = pipeline.run(payloads)
+    except InputError as exc:
+        _fail(str(exc))
+    except OSError as exc:
+        _fail(f"cannot read input: {exc.strerror or exc}")
+
+    if report.payloads_scanned == 0:
+        _fail("no payloads found in the given inputs")
+    if not report.groups:
+        _fail("no findings, so there is no ticket to build")
+
+    selected = _select_group(report, group)
+    generated = build_ticket(selected, payloads, schema_document, redact=redact)
+    rendered = render(generated, target_format)
+
+    if output is not None:
+        try:
+            output.write_text(rendered + "\n", encoding="utf-8")
+        except OSError as exc:
+            _fail(f"cannot write {output}: {exc.strerror or exc}")
+    elif not push:
+        _emit(rendered)
+
+    if not push:
+        return
+
+    if not (jira_url and jira_email and jira_token and project):
+        _fail("--push needs JIRA_URL, JIRA_EMAIL, JIRA_API_TOKEN and JIRA_PROJECT")
+    try:
+        from .jira import JiraClient, JiraConfig, JiraError
+    except ImportError:
+        _fail('Jira support needs the optional dependency: pip install "assay[jira]"')
+    try:
+        with JiraClient(
+            JiraConfig(
+                base_url=jira_url,
+                email=jira_email,
+                token=jira_token,
+                project=project,
+                issue_type=issue_type,
+            )
+        ) as client:
+            action, key = client.upsert(generated)
+    except (JiraError, ValueError) as exc:
+        _fail(str(exc))
+    typer.echo(f"{action} {key}")
+
+
+def _select_group(report: Report, selector: str) -> Group:
+    if selector.isdigit():
+        index = int(selector)
+        if index < 1 or index > len(report.groups):
+            _fail(f"group {index} is out of range; the report has {len(report.groups)}")
+        return report.groups[index - 1]
+    for candidate in report.groups:
+        if candidate.fingerprint == selector:
+            return candidate
+    _fail(f"no group matches fingerprint {selector!r}")
 
 
 @app.command()

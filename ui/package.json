@@ -1,7 +1,7 @@
 {
   "name": "assay-ui",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Browser bundle for the Assay web UI",
   "scripts": {
     "build": "esbuild src/main.js --bundle --minify --format=iife --target=es2020 --outfile=../src/assay/static/app.js",

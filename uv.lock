@@ -52,7 +52,7 @@ wheels = [
 
 [[package]]
 name = "assay"
-version = "1.3.0"
+version = "1.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "ftfy" },
@@ -71,12 +71,19 @@ api = [
     { name = "uvicorn" },
 ]
 dev = [
+    { name = "fastapi" },
+    { name = "httpx" },
     { name = "hypothesis" },
+    { name = "jinja2" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "uvicorn" },
+]
+jira = [
+    { name = "httpx" },
 ]
 
 [package.dev-dependencies]
@@ -91,9 +98,13 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.165.0" },
+    { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.165.0" },
     { name = "ftfy", specifier = ">=6.3.1" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.1" },
+    { name = "httpx", marker = "extra == 'jira'", specifier = ">=0.28.1" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
     { name = "jinja2", marker = "extra == 'api'", specifier = ">=3.1.6" },
+    { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.1.6" },
     { name = "jsonschema", extras = ["format"], specifier = ">=4.22" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.7" },
@@ -106,8 +117,9 @@ requires-dist = [
     { name = "typer", specifier = ">=0.29" },
     { name = "usaddress", specifier = ">=0.5.16" },
     { name = "uvicorn", marker = "extra == 'api'", specifier = ">=0.54.0" },
+    { name = "uvicorn", marker = "extra == 'dev'", specifier = ">=0.54.0" },
 ]
-provides-extras = ["dev", "api"]
+provides-extras = ["dev", "api", "jira"]
 
 [package.metadata.requires-dev]
 dev = [
