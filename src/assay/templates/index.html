@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assay</title>
+<meta name="description" content="Check JSON payloads and group the errors by root cause.">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="masthead">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">A</span>
+    <div>
+      <h1>Assay</h1>
+      <p>JSON payload error identifier</p>
+    </div>
+  </div>
+  <div class="masthead-meta">
+    <span class="version" id="version">v{{ version }}</span>
+    <a href="/docs">API docs</a>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="panel inputs" aria-label="Inputs">
+    <div class="field">
+      <div class="field-head">
+        <label for="payloads">Payloads</label>
+        <div class="field-actions">
+          <button type="button" class="link" id="sample">Load sample</button>
+          <button type="button" class="link" id="upload-payloads">Upload</button>
+          <input type="file" id="payload-file" accept=".json,.ndjson,.jsonl,application/json" hidden>
+        </div>
+      </div>
+      <textarea id="payloads" spellcheck="false" placeholder='One JSON value, or one JSON value per line for a batch.'></textarea>
+      <p class="note" id="payload-note">JSON or NDJSON. Each line becomes a separate payload.</p>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label for="schema">Schema</label>
+        <div class="field-actions">
+          <button type="button" class="link" id="upload-schema">Upload</button>
+          <input type="file" id="schema-file" accept=".json,application/json" hidden>
+        </div>
+      </div>
+      <textarea id="schema" spellcheck="false" placeholder='{"type": "object", "required": ["id"]}'></textarea>
+      <p class="note">Draft 2020-12. Required.</p>
+    </div>
+
+    <details class="field rules">
+      <summary>Rules and geography <span class="optional">optional</span></summary>
+      <div class="field-head">
+        <label for="rules">Rules YAML</label>
+        <div class="field-actions">
+          <button type="button" class="link" id="upload-rules">Upload</button>
+          <input type="file" id="rules-file" accept=".yaml,.yml" hidden>
+        </div>
+      </div>
+      <textarea id="rules" spellcheck="false" placeholder="version: 1&#10;rules:&#10;  - id: dates-ordered&#10;    kind: compare&#10;    ..."></textarea>
+      <p class="note">Setup rules, string limits and address checks. Validated on the server.</p>
+    </details>
+
+    <div class="controls">
+      <label class="check">
+        <input type="checkbox" id="redact">
+        <span>Redact values</span>
+      </label>
+      <button type="button" class="primary" id="run">
+        Check payloads
+        <kbd>Ctrl</kbd><kbd>Enter</kbd>
+      </button>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="panel report" aria-label="Report" aria-live="polite">
+    <div class="empty" id="empty">
+      <h2>Nothing checked yet</h2>
+      <p>Paste a payload and its schema, or load the sample. The report shows one row per root cause, not one per record.</p>
+      <ul>
+        <li>Every finding keeps its JSON path and a fix hint.</li>
+        <li>Syntax, schema, setup, string and address checks run in one pass.</li>
+        <li>Values can be redacted before anything leaves this page.</li>
+      </ul>
+    </div>
+
+    <div id="report" hidden>
+      <div class="summary" id="summary"></div>
+      <div id="next"></div>
+      <div class="groups" id="groups"></div>
+      <div class="correlated" id="correlated"></div>
+      <div class="report-actions">
+        <button type="button" class="secondary" id="download">Download JSON</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <span>Stateless: nothing is stored or logged.</span>
+  <span><a href="https://github.com/sanseryf/assay">Source</a></span>
+</footer>
+
+<script src="/static/app.js" defer></script>
+</body>
+</html>

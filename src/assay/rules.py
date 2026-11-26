@@ -260,20 +260,16 @@ class RulesConfig(BaseModel):
 EMPTY_CONFIG = RulesConfig()
 
 
-def load_config(path: Path) -> RulesConfig:
-    """Read and validate a rules file, raising :class:`ConfigError` with the reason."""
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise ConfigError(f"cannot read {path}: {exc.strerror or exc}") from exc
+def parse_config(text: str, *, source: str = "rules") -> RulesConfig:
+    """Parse and validate YAML rule text, raising :class:`ConfigError` with the reason."""
     try:
         document = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise ConfigError(f"{path} is not valid YAML: {exc}") from exc
+        raise ConfigError(f"{source} is not valid YAML: {exc}") from exc
     if document is None:
         return RulesConfig()
     if not isinstance(document, dict):
-        raise ConfigError(f"{path} must contain a mapping at the top level")
+        raise ConfigError(f"{source} must contain a mapping at the top level")
     try:
         return RulesConfig.model_validate(document)
     except ValidationError as exc:
@@ -281,7 +277,16 @@ def load_config(path: Path) -> RulesConfig:
             f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
             for error in exc.errors()
         )
-        raise ConfigError(f"invalid rules in {path}: {details}") from exc
+        raise ConfigError(f"invalid rules in {source}: {details}") from exc
+
+
+def load_config(path: Path) -> RulesConfig:
+    """Read and validate a rules file, raising :class:`ConfigError` with the reason."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ConfigError(f"cannot read {path}: {exc.strerror or exc}") from exc
+    return parse_config(text, source=str(path))
 
 
 def rules_by_kind(config: RulesConfig, kind: str) -> list[_Rule]:
