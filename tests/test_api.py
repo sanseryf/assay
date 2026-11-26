@@ -104,3 +104,82 @@ def test_redaction_applies_to_the_api(client: TestClient) -> None:
     report = response.json()
     assert report["redacted"] is True
     assert report["groups"][0]["sample_values"] == ["####"]
+
+
+def test_index_serves_the_application_shell(client: TestClient) -> None:
+    page = client.get("/").text
+    assert 'id="payloads"' in page
+    assert 'id="schema"' in page
+    assert 'id="run"' in page
+    assert "/static/app.js" in page
+
+
+def test_static_assets_are_served(client: TestClient) -> None:
+    response = client.get("/static/app.css")
+    assert response.status_code == 200
+    assert "--accent" in response.text
+    script = client.get("/static/app.js")
+    assert script.status_code == 200
+    assert "/assay/batch" in script.text
+
+
+def test_batch_endpoint_checks_every_payload(client: TestClient) -> None:
+    response = client.post("/assay/batch", json={"payloads": [GOOD, BAD], "schema": SCHEMA})
+    assert response.status_code == 200
+    report = response.json()
+    assert report["payloads_scanned"] == 2
+    assert report["payloads_clean"] == 1
+    assert report["groups"][0]["path"] == "members[*].zip"
+
+
+def test_batch_endpoint_needs_a_payload(client: TestClient) -> None:
+    response = client.post("/assay/batch", json={"payloads": [], "schema": SCHEMA})
+    assert response.status_code == 400
+
+
+def test_batch_accepts_rules_yaml(client: TestClient) -> None:
+    rules = """
+rules:
+  - id: dates
+    kind: compare
+    left: "$.start"
+    op: "<="
+    right: "$.end"
+"""
+    response = client.post(
+        "/assay/batch",
+        json={
+            "payloads": [{"start": "2024-09-01", "end": "2024-01-01"}],
+            "schema": {"type": "object"},
+            "rules_yaml": rules,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["groups"][0]["layer"] == "setup"
+
+
+def test_batch_rejects_two_rule_forms(client: TestClient) -> None:
+    response = client.post(
+        "/assay/batch",
+        json={
+            "payloads": [GOOD],
+            "schema": SCHEMA,
+            "rules": {"rules": []},
+            "rules_yaml": "rules: []",
+        },
+    )
+    assert response.status_code == 400
+    assert "not both" in response.json()["detail"]
+
+
+def test_batch_rejects_invalid_rules_yaml(client: TestClient) -> None:
+    response = client.post(
+        "/assay/batch",
+        json={
+            "payloads": [GOOD],
+            "schema": SCHEMA,
+            "rules_yaml": "rules:\n  - id: broken\n    kind: nope\n",
+        },
+    )
+    assert response.status_code == 400
+    assert "invalid rules" in response.json()["detail"]
