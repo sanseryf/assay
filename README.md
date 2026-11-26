@@ -6,12 +6,13 @@
 > every error at once, pins each finding to a path, and groups the findings by root cause.
 > You fix one mapping instead of reading 4,000 identical failures.
 
-**Status: v1.3. Milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
+**Status: v1.4. Milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
 string quality, offline geography, USPS verification (opt-in), redaction, HTML/SARIF
-reports, a web UI with a CodeMirror editor, an HTTP API, and a Docker image. The
-Switchyard validation stage (M8) lives in the separate **Switchyard** project: signed
-ingest, routing, retries, and a DLQ that stores Assay's grouped report. This README
-covers only what runs in this repository.
+reports, a web UI with a CodeMirror editor, ticket generation and Jira Cloud
+create/update, an HTTP API, and a Docker image. The Switchyard validation stage (M8)
+lives in the separate **Switchyard** project: signed ingest, routing, retries, and a DLQ
+that stores Assay's grouped report. This README covers only what runs in this
+repository.
 
 ![Assay web UI at night](docs/ui.png)
 
@@ -260,6 +261,50 @@ The interface has two schemes: a near-black forest night and a warm parchment da
 toggled in the masthead and remembered in `localStorage`. Type is self-hosted:
 Fraunces for display, Inter for UI and JetBrains Mono for paths and values. There are no
 external assets and no CDN.
+
+### Tickets and Jira
+
+The GUI can copy a ticket from any group. The CLI does the same and can push it to Jira
+Cloud:
+
+```bash
+# Markdown for GitHub, Linear or a wiki
+assay ticket payload.json --schema schema.json --group 1
+
+# Jira wiki markup, or ADF for the Jira API
+assay ticket payload.json --schema schema.json --format jira
+assay ticket payload.json --schema schema.json --format adf
+
+# Write it to a file instead of stdout
+assay ticket payload.json --schema schema.json --output ticket.md
+```
+
+`--group` accepts a 1-based number or a fingerprint. The ticket contains one failing
+record, the expected value from the schema, the actual value as a shape, the affected
+count, the fix hint, the raw fingerprint and a stable `assay-...` label. Values are
+redacted by default; `--no-redact` is deliberate and explicit.
+
+To create or update an issue, install the optional Jira dependency and provide
+credentials in the environment:
+
+```bash
+pip install "assay[jira]"
+
+export JIRA_URL=https://team.atlassian.net
+export JIRA_EMAIL=you@example.com
+export JIRA_API_TOKEN=...
+export JIRA_PROJECT=ABC
+
+assay ticket payload.json --schema schema.json --push
+```
+
+Before creating anything, Assay searches for the label. If an issue already carries it,
+the run adds a comment with the new counts instead of opening a duplicate. Otherwise it
+creates a Bug with the label, the ADF description and the minimal repro. `--issue-type`
+and `--project` override the defaults. The token is read from the environment or the
+option, is never written to disk, and is scrubbed from API errors.
+
+The Jira path needs `httpx`; the rest of Assay does not.
 
 ### Docker
 
@@ -511,6 +556,8 @@ src/assay/
   static/        the UI stylesheet, bundled script and favicon
   static/fonts/  self-hosted Fraunces, Inter and JetBrains Mono, with OFL licenses
 ui/              CodeMirror source, esbuild build and a browser smoke test
+tickets.py       minimal repro, expected/actual values and the ticket renderers
+jira.py          Jira Cloud client: search by label, create or comment
   cli.py         Typer app and the exit-code contract
 ARCHITECTURE.md  the full design; unbuilt sections are marked planned
 NOTICE.md        attribution for the bundled GeoNames and Census data

@@ -4,6 +4,24 @@ All notable changes to Assay are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-11-26
+
+### Added
+
+- **`assay ticket`.** Build a ticket for one report group from the CLI:
+  - Markdown, Jira wiki markup, ADF or a JSON ticket model
+  - one failing record as a minimal repro, expected value from the schema, actual value
+    as a shape, affected count, fix hint and the raw fingerprint
+  - redacted by default; `--no-redact` is explicit
+  - `--group` by number or fingerprint, and `--output` for a file
+- **Jira Cloud create/update.** `--push` searches for the ticket's `assay-...` label and
+  comments on the existing issue, or creates one with the label and an ADF description.
+  Credentials come from `JIRA_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` and `JIRA_PROJECT`, or
+  the matching options. The token is never written to disk and is scrubbed from errors.
+- Optional `jira` extra containing `httpx`; the rest of the tool does not need it.
+- Unit tests for path parsing, minimal repros, redaction, all renderers, the Jira client
+  (creation, deduplication, error scrubbing) and the CLI.
+
 ## [1.3.0] - 2026-11-26
 
 ### Added
