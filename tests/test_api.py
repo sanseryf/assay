@@ -111,6 +111,8 @@ def test_index_serves_the_application_shell(client: TestClient) -> None:
     assert 'id="payloads"' in page
     assert 'id="schema"' in page
     assert 'id="run"' in page
+    assert 'id="theme-toggle"' in page
+    assert 'name="theme-color"' in page
     assert "/static/app.js" in page
 
 
@@ -121,6 +123,9 @@ def test_static_assets_are_served(client: TestClient) -> None:
     script = client.get("/static/app.js")
     assert script.status_code == 200
     assert "/assay/batch" in script.text
+    font = client.get("/static/fonts/inter-latin.woff2")
+    assert font.status_code == 200
+    assert font.content[:4] == b"wOF2"
 
 
 def test_batch_endpoint_checks_every_payload(client: TestClient) -> None:
