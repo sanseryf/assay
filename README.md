@@ -6,12 +6,12 @@
 > every error at once, pins each finding to a path, and groups the findings by root cause.
 > You fix one mapping instead of reading 4,000 identical failures.
 
-**Status: v1.2. Milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
+**Status: v1.3. Milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
 string quality, offline geography, USPS verification (opt-in), redaction, HTML/SARIF
-reports, a web UI, an HTTP API, and a Docker image. The Switchyard validation
-stage (M8) lives in the separate **Switchyard** project: signed ingest, routing, retries,
-and a DLQ that stores Assay's grouped report. This README covers only what runs in this
-repository.
+reports, a web UI with a CodeMirror editor, an HTTP API, and a Docker image. The
+Switchyard validation stage (M8) lives in the separate **Switchyard** project: signed
+ingest, routing, retries, and a DLQ that stores Assay's grouped report. This README
+covers only what runs in this repository.
 
 ![Assay web UI at night](docs/ui.png)
 
@@ -221,15 +221,29 @@ uv sync --extra api
 uv run assay serve --port 8000
 ```
 
-Open <http://127.0.0.1:8000>. The page accepts one JSON value or one per line, a schema
-and an optional rules YAML file. It runs the same pipeline as the CLI and renders the
-grouped report: summary counts, the fix that clears the most findings, one card per root
-cause with path, hint and samples, correlation notes, and a redaction toggle. The sample
-button loads a payload with several planted defects, and Ctrl+Enter runs the check. The
-report can be downloaded as JSON.
+Open <http://127.0.0.1:8000>. The payload is a CodeMirror 6 editor with JSON
+highlighting, a lint gutter, squiggles and hover tooltips. Every finding is underlined
+at its location, and the two directions are linked:
+
+- click a group, a path or an affected record and the editor jumps to that spot and
+  highlights every instance
+- click a squiggle and the matching group opens
+
+The schema and rules fields accept uploads or drops, and a JSON or NDJSON file can be
+dropped straight onto the editor. Each group card expands to show the records it hit,
+with the payload id, concrete path and a redacted value preview. Filters narrow the
+report by layer and severity.
+
+The report can be downloaded as JSON or as the standalone HTML format. Each group also
+offers a redacted ticket in Markdown, Jira wiki markup or Jira's Atlassian Document
+Format. Tickets carry a minimal repro, expected and actual values, the fix hint and a
+stable `assay-...` label derived from the fingerprint, so a team can find the existing
+issue instead of opening a duplicate.
 
 The page calls `POST /assay/batch`, which takes `payloads`, `schema`, optional `rules` or
-`rules_yaml`, and `redact`. `POST /assay` still accepts a single payload:
+`rules_yaml`, and `redact`, and returns the same report as `--format json` plus a bounded
+list of occurrences for the editor. `POST /assay/export/html` returns the HTML report as
+a download. `POST /assay` still accepts a single payload:
 
 ```bash
 curl -s localhost:8000/assay -H 'content-type: application/json' -d '{
@@ -494,8 +508,9 @@ src/assay/
   redact.py      shape tokens and value scrubbing for --redact
   api.py         FastAPI app: the web UI routes, batch endpoint and single-payload API
   templates/     the HTML shell for the web UI
-  static/        the UI stylesheet and script, served from /static
+  static/        the UI stylesheet, bundled script and favicon
   static/fonts/  self-hosted Fraunces, Inter and JetBrains Mono, with OFL licenses
+ui/              CodeMirror source, esbuild build and a browser smoke test
   cli.py         Typer app and the exit-code contract
 ARCHITECTURE.md  the full design; unbuilt sections are marked planned
 NOTICE.md        attribution for the bundled GeoNames and Census data

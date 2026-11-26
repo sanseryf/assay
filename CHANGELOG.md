@@ -4,6 +4,35 @@ All notable changes to Assay are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-11-26
+
+### Added
+
+- **CodeMirror 6 editor.** JSON highlighting, line numbers, a lint gutter, squiggles and
+  hover tooltips. The bundle lives in `static/app.js`; the source and esbuild build are in
+  `ui/`. Node is only needed when changing the UI.
+- **Two-way navigation.** `jsonc-parser` maps a report path such as `members[3].zip` to a
+  document range. Clicking a group, path or affected record selects and scrolls to that
+  range and highlights every instance of the group. Clicking a squiggle opens the group.
+- **Expandable group cards.** The API now returns up to 50 occurrences per group with the
+  payload id, concrete path, line and column, and a value preview. The card shows them on
+  demand.
+- **Layer and severity filters**, with a visible count and an empty state.
+- **Drag and drop** for payloads, schema and rules files.
+- **HTML export from the page** through `POST /assay/export/html`, alongside the existing
+  JSON download.
+- **Redacted tickets** from each group in Markdown, Jira wiki markup or Atlassian
+  Document Format. They include a minimal repro, expected and actual values, the fix,
+  the fingerprint and a stable `assay-...` label for deduplication.
+- A favicon, and a `ui/smoke.mjs` browser check for the interactions Python tests cannot
+  cover.
+
+### Changed
+
+- `/assay` and `/assay/batch` now include `occurrences` in the response. The CLI JSON
+  output is unchanged; the field is opt-in in `Report.to_dict`.
+- The payload textarea is gone; the editor is the input.
+
 ## [1.2.0] - 2026-11-26
 
 ### Changed
