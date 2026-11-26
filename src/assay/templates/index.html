@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assay</title>
 <meta name="description" content="Check JSON payloads and group the errors by root cause.">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#030705" id="theme-color">
 <script>
 (function () {
@@ -60,8 +61,10 @@
           <input type="file" id="payload-file" accept=".json,.ndjson,.jsonl,application/json" hidden>
         </div>
       </div>
-      <textarea id="payloads" spellcheck="false" placeholder='One JSON value, or one JSON value per line for a batch.'></textarea>
-      <p class="note" id="payload-note">JSON or NDJSON. Each line becomes a separate payload.</p>
+      <div class="editor-shell" id="editor-shell">
+        <div id="editor"></div>
+      </div>
+      <p class="note" id="payload-note">JSON or NDJSON. Drag a file here, or paste one value per line for a batch.</p>
     </div>
 
     <div class="field">
@@ -104,13 +107,29 @@
 
   <section class="panel report" aria-label="Report" aria-live="polite">
     <p class="panel-eyebrow">02 · Report</p>
+    <div class="report-toolbar">
+      <div class="filters">
+        <label>Layer
+          <select id="layer-filter"><option value="all">All layers</option></select>
+        </label>
+        <label>Severity
+          <select id="severity-filter">
+            <option value="all">All severities</option>
+            <option value="error">Error</option>
+            <option value="warning">Warning</option>
+            <option value="info">Info</option>
+          </select>
+        </label>
+      </div>
+      <span class="visible-count" id="visible-count"></span>
+    </div>
     <div class="empty" id="empty">
       <h2>Nothing checked yet</h2>
-      <p>Paste a payload and its schema, or load the sample. The report shows one row per root cause, not one per record.</p>
+      <p>Paste a payload and its schema, or load the sample. Click a group to jump to the broken spot in the payload; every finding is underlined in the editor.</p>
       <ul>
         <li>Every finding keeps its JSON path and a fix hint.</li>
         <li>Syntax, schema, setup, string and address checks run in one pass.</li>
-        <li>Values can be redacted before anything leaves this page.</li>
+        <li>Drag a JSON or NDJSON file onto the editor to load a batch.</li>
       </ul>
     </div>
 
@@ -121,6 +140,7 @@
       <div class="correlated" id="correlated"></div>
       <div class="report-actions">
         <button type="button" class="secondary" id="download">Download JSON</button>
+        <button type="button" class="secondary" id="download-html">Download HTML</button>
       </div>
     </div>
   </section>

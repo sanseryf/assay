@@ -28,6 +28,10 @@ htmlcov/
 coverage.xml
 pytest-of-*/
 
+# UI build dependencies (the bundle in src/assay/static is committed)
+ui/node_modules/
+ui/smoke-shots/
+
 # Generated demo data (see examples/make_demo_batch.py)
 examples/demo-batch.ndjson
 

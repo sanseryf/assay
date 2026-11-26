@@ -17,7 +17,7 @@ from .schema import SchemaLayer
 from .setup import SetupLayer
 from .syntax import SyntaxResult, analyze
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 __all__ = [
     "ConfigError",
