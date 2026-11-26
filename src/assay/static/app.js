@@ -58,7 +58,9 @@ const elements = {
   groups: document.getElementById("groups"),
   correlated: document.getElementById("correlated"),
   download: document.getElementById("download"),
-  payloadNote: document.getElementById("payload-note")
+  payloadNote: document.getElementById("payload-note"),
+  themeToggle: document.getElementById("theme-toggle"),
+  themeColor: document.getElementById("theme-color")
 };
 
 let lastReport = null;
@@ -105,12 +107,13 @@ function stat(label, value, modifier) {
 }
 
 function renderSummary(report) {
+  const elapsed = report.duration_ms < 1 ? "<1 ms" : report.duration_ms + " ms";
   elements.summary.replaceChildren(
     stat("Payloads", report.payloads_scanned),
     stat("Clean", report.payloads_clean, "clean"),
     stat("Findings", report.findings_total, report.errors ? "error" : ""),
     stat("Groups", report.groups.length),
-    stat("Time", report.duration_ms + " ms")
+    stat("Time", elapsed)
   );
 }
 
@@ -223,9 +226,10 @@ function renderReport(report) {
   const clean = report.payloads_clean;
   const total = report.payloads_scanned;
   const findings = report.findings_total;
+  const elapsed = report.duration_ms < 1 ? "<1 ms" : report.duration_ms + " ms";
   setStatus(
     "Checked " + total + (total === 1 ? " payload" : " payloads") +
-      " in " + report.duration_ms + " ms. " +
+      " in " + elapsed + ". " +
       clean + " clean, " + findings + (findings === 1 ? " finding" : " findings") + ".",
     ""
   );
@@ -341,6 +345,33 @@ document.addEventListener("keydown", (event) => {
     run();
   }
 });
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  try {
+    localStorage.setItem("assay.theme", theme);
+  } catch (error) {}
+  const day = theme === "day";
+  if (elements.themeColor) elements.themeColor.content = day ? "#D8CDB7" : "#030705";
+  if (elements.themeToggle) {
+    elements.themeToggle.setAttribute("aria-pressed", day ? "true" : "false");
+    elements.themeToggle.setAttribute(
+      "aria-label",
+      day ? "Switch to night theme" : "Switch to day theme"
+    );
+  }
+}
+
+function wireTheme() {
+  if (!elements.themeToggle) return;
+  elements.themeToggle.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "day" ? "night" : "day";
+    applyTheme(next);
+  });
+  applyTheme(document.documentElement.dataset.theme === "day" ? "day" : "night");
+}
+
+wireTheme();
 
 wireFile("upload-payloads", "payload-file", elements.payloads, elements.payloadNote);
 wireFile("upload-schema", "schema-file", elements.schema, null);

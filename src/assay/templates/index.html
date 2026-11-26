@@ -5,25 +5,52 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assay</title>
 <meta name="description" content="Check JSON payloads and group the errors by root cause.">
+<meta name="theme-color" content="#030705" id="theme-color">
+<script>
+(function () {
+  var theme = "night";
+  try {
+    var forced = new URLSearchParams(window.location.search).get("theme");
+    if (forced === "day" || forced === "night") {
+      theme = forced;
+    } else {
+      var saved = localStorage.getItem("assay.theme");
+      if (saved === "day" || saved === "night") theme = saved;
+    }
+  } catch (error) {}
+  document.documentElement.dataset.theme = theme;
+  try {
+    if (new URLSearchParams(window.location.search).has("still")) {
+      document.documentElement.dataset.still = "1";
+    }
+  } catch (error) {}
+})();
+</script>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+<div class="atmosphere" aria-hidden="true"><span class="aurora"></span><span class="stars"></span></div>
 <header class="masthead">
-  <div class="brand">
-    <span class="mark" aria-hidden="true">A</span>
-    <div>
-      <h1>Assay</h1>
-      <p>JSON payload error identifier</p>
-    </div>
-  </div>
+  <a class="brand" href="/" aria-label="Assay home">
+    <span class="monogram" aria-hidden="true">A</span>
+    <span class="brand-text">
+      <span class="eyebrow">Assay · JSON payload checks</span>
+      <span class="wordmark">Assay</span>
+    </span>
+  </a>
   <div class="masthead-meta">
     <span class="version" id="version">v{{ version }}</span>
     <a href="/docs">API docs</a>
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to day theme" aria-pressed="false">
+      <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      <svg class="icon moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/></svg>
+    </button>
   </div>
 </header>
 
 <main class="layout">
   <section class="panel inputs" aria-label="Inputs">
+    <p class="panel-eyebrow">01 · Input</p>
     <div class="field">
       <div class="field-head">
         <label for="payloads">Payloads</label>
@@ -76,6 +103,7 @@
   </section>
 
   <section class="panel report" aria-label="Report" aria-live="polite">
+    <p class="panel-eyebrow">02 · Report</p>
     <div class="empty" id="empty">
       <h2>Nothing checked yet</h2>
       <p>Paste a payload and its schema, or load the sample. The report shows one row per root cause, not one per record.</p>
