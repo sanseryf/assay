@@ -190,8 +190,41 @@ class Report:
             return 1
         return 0
 
-    def to_dict(self) -> dict[str, Any]:
-        """Machine-readable form. Stable enough for CI snapshots."""
+    def to_dict(self, *, include_occurrences: bool = False) -> dict[str, Any]:
+        """Machine-readable form. Stable enough for CI snapshots.
+
+        ``occurrences`` is opt-in because it repeats findings and would bloat every
+        CLI JSON export. The API asks for it so the UI can highlight records.
+        """
+        groups: list[dict[str, Any]] = []
+        for g in self.groups:
+            item: dict[str, Any] = {
+                "fingerprint": g.fingerprint,
+                "layer": g.layer.value,
+                "rule": g.rule,
+                "path": g.path,
+                "severity": g.severity.value,
+                "message": g.message,
+                "hint": g.hint,
+                "count": g.count,
+                "payloads_affected": g.payloads_affected,
+                "impact": round(g.impact, 3),
+                "sample_values": list(g.sample_values),
+                "correlated_with": list(g.correlated_with),
+            }
+            if include_occurrences:
+                item["occurrences"] = [
+                    {
+                        "payload_id": finding.payload_id,
+                        "path": finding.path,
+                        "line": finding.line,
+                        "col": finding.col,
+                        "value_preview": finding.value_preview,
+                    }
+                    for finding in g.findings[:50]
+                ]
+                item["occurrences_total"] = g.count
+            groups.append(item)
         return {
             "payloads_scanned": self.payloads_scanned,
             "payloads_clean": self.payloads_clean,
@@ -202,21 +235,5 @@ class Report:
             "infos": self.infos,
             "duration_ms": self.duration_ms,
             "redacted": self.redacted,
-            "groups": [
-                {
-                    "fingerprint": g.fingerprint,
-                    "layer": g.layer.value,
-                    "rule": g.rule,
-                    "path": g.path,
-                    "severity": g.severity.value,
-                    "message": g.message,
-                    "hint": g.hint,
-                    "count": g.count,
-                    "payloads_affected": g.payloads_affected,
-                    "impact": round(g.impact, 3),
-                    "sample_values": list(g.sample_values),
-                    "correlated_with": list(g.correlated_with),
-                }
-                for g in self.groups
-            ],
+            "groups": groups,
         }

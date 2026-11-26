@@ -14,16 +14,18 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from . import __version__
+from .formats import to_html
 from .geo.store import GeoDataError
 from .geo.verify import VerificationError
 from .loader import Payload
+from .models import Report
 from .pipeline import Limits, Pipeline
 from .rules import ConfigError, RulesConfig, parse_config
 
@@ -96,31 +98,45 @@ def create_app() -> FastAPI:
 
     @app.post("/assay/batch")
     def assay_batch(request: BatchRequest) -> dict[str, Any]:
-        if not request.payloads:
-            raise HTTPException(status_code=400, detail="send at least one payload")
-        if len(request.payloads) > MAX_BATCH_PAYLOADS:
-            raise HTTPException(
-                status_code=413,
-                detail=f"at most {MAX_BATCH_PAYLOADS:,} payloads per request",
-            )
-        rules = _rules(request.rules, request.rules_yaml)
-        payloads = [
-            Payload(
-                payload_id=f"payload-{index}",
-                raw=json.dumps(item, ensure_ascii=False).encode("utf-8"),
-            )
-            for index, item in enumerate(request.payloads, 1)
-        ]
-        total = sum(len(payload.raw) for payload in payloads)
-        if total > MAX_BATCH_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=f"batch is larger than {MAX_BATCH_BYTES // (1024 * 1024)} MB",
-            )
-        pipeline = _pipeline(request.schema_, rules, request.redact)
-        return _run(pipeline, payloads)
+        report = _batch(request)
+        return report.to_dict(include_occurrences=True)
+
+    @app.post("/assay/export/html")
+    def assay_export_html(request: BatchRequest) -> Response:
+        report = _batch(request)
+        return Response(
+            content=to_html(report),
+            media_type="text/html; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="assay-report.html"'},
+        )
 
     return app
+
+
+def _batch(request: BatchRequest) -> Report:
+    if not request.payloads:
+        raise HTTPException(status_code=400, detail="send at least one payload")
+    if len(request.payloads) > MAX_BATCH_PAYLOADS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"at most {MAX_BATCH_PAYLOADS:,} payloads per request",
+        )
+    rules = _rules(request.rules, request.rules_yaml)
+    payloads = [
+        Payload(
+            payload_id=f"payload-{index}",
+            raw=json.dumps(item, ensure_ascii=False).encode("utf-8"),
+        )
+        for index, item in enumerate(request.payloads, 1)
+    ]
+    total = sum(len(payload.raw) for payload in payloads)
+    if total > MAX_BATCH_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"batch is larger than {MAX_BATCH_BYTES // (1024 * 1024)} MB",
+        )
+    pipeline = _pipeline(request.schema_, rules, request.redact)
+    return _report(pipeline, payloads)
 
 
 def _pipeline(schema: dict[str, Any], rules: RulesConfig, redact: bool) -> Pipeline:
@@ -138,13 +154,17 @@ def _pipeline(schema: dict[str, Any], rules: RulesConfig, redact: bool) -> Pipel
 
 
 def _run(pipeline: Pipeline, payloads: list[Payload]) -> dict[str, Any]:
+    report = _report(pipeline, payloads)
+    return report.to_dict(include_occurrences=True)
+
+
+def _report(pipeline: Pipeline, payloads: list[Payload]) -> Report:
     try:
-        report = pipeline.run(payloads)
+        return pipeline.run(payloads)
     except GeoDataError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except VerificationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return report.to_dict()
 
 
 def _rules(document: dict[str, Any] | None, yaml_text: str | None) -> RulesConfig:

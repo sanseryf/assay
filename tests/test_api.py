@@ -108,9 +108,10 @@ def test_redaction_applies_to_the_api(client: TestClient) -> None:
 
 def test_index_serves_the_application_shell(client: TestClient) -> None:
     page = client.get("/").text
-    assert 'id="payloads"' in page
+    assert 'id="editor"' in page
     assert 'id="schema"' in page
     assert 'id="run"' in page
+    assert 'id="layer-filter"' in page
     assert 'id="theme-toggle"' in page
     assert 'name="theme-color"' in page
     assert "/static/app.js" in page
@@ -188,3 +189,19 @@ def test_batch_rejects_invalid_rules_yaml(client: TestClient) -> None:
     )
     assert response.status_code == 400
     assert "invalid rules" in response.json()["detail"]
+
+
+def test_batch_includes_occurrences_for_the_ui(client: TestClient) -> None:
+    response = client.post("/assay/batch", json={"payloads": [BAD], "schema": SCHEMA})
+    group = response.json()["groups"][0]
+    assert group["occurrences"][0]["payload_id"] == "payload-1"
+    assert group["occurrences"][0]["path"] == "members[0].zip"
+    assert group["occurrences_total"] == 1
+
+
+def test_export_html_is_a_download(client: TestClient) -> None:
+    response = client.post("/assay/export/html", json={"payloads": [BAD], "schema": SCHEMA})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "assay-report.html" in response.headers["content-disposition"]
+    assert "members[*].zip" in response.text
