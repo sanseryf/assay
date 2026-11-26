@@ -4,6 +4,27 @@ All notable changes to Assay are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-11-26
+
+### Added
+
+- **Web UI.** `assay serve` now opens a real application instead of a paste box:
+  - payload textarea and file upload for JSON or NDJSON, schema input and upload, and
+    optional rules YAML
+  - redaction toggle, Ctrl+Enter to run, sample payload with planted defects
+  - report view with summary counts, the highest-impact fix, one card per group with
+    path, hint and sample values, correlation notes, and a JSON download
+  - responsive dark and light themes, no build step and no external assets
+- **`POST /assay/batch`** for the UI: up to 2,000 payloads and 10 MB per request.
+- **`rules_yaml`** on both API endpoints, so a browser can send the rules file as text.
+  It is validated with the same Pydantic models as the CLI.
+- Jinja2 templates and static assets ship inside the package and the wheel.
+
+### Changed
+
+- The old inline paste page is gone; the route now renders `templates/index.html`.
+- The API extra now includes Jinja2.
+
 ## [Unreleased]
 
 ### Changed

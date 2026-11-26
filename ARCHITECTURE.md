@@ -407,10 +407,12 @@ Assay · 2,000 payloads · 1,766 clean · 234 with errors · 412 ms
 ### API and Switchyard integration (API built in M7; Switchyard built separately for M8)
 
 `POST /assay` with `{payload, schema, rules?, redact?}` returns a `Report`; `GET /` serves
-the paste-in page, and `GET /health` reports the version. Switchyard (a separate
-project, v0.1.0) consumes that endpoint as a validation stage: a payload Assay rejects
-goes to its dead-letter queue with the grouped report attached, so the DLQ explains
-itself.
+the web UI, and `GET /health` reports the version. Switchyard (a separate project,
+v0.1.0) consumes that endpoint as a validation stage: a payload Assay rejects goes to its
+dead-letter queue with the grouped report attached, so the DLQ explains itself.
+
+The web UI (v1.1) is a no-build HTML page served by the same FastAPI app. It posts to
+`POST /assay/batch`, renders the grouped report, and can redact values before sending.
 
 ```mermaid
 sequenceDiagram

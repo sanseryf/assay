@@ -6,12 +6,14 @@
 > every error at once, pins each finding to a path, and groups the findings by root cause.
 > You fix one mapping instead of reading 4,000 identical failures.
 
-**Status: v1.0. Milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
+**Status: v1.1. Milestones M1–M7 are built and tested.** Syntax, schema, setup rules,
 string quality, offline geography, USPS verification (opt-in), redaction, HTML/SARIF
-reports, an HTTP API with a paste-in page, and a Docker image. The Switchyard validation
+reports, a web UI, an HTTP API, and a Docker image. The Switchyard validation
 stage (M8) lives in the separate **Switchyard** project: signed ingest, routing, retries,
 and a DLQ that stores Assay's grouped report. This README covers only what runs in this
 repository.
+
+![Assay web UI](docs/ui.png)
 
 ## The 2,000-payload demo
 
@@ -208,16 +210,24 @@ the repaired text in a mojibake hint or the standardized address from USPS, are 
 rather than half-redacted, because a substring scrub cannot know the derived form.
 Fingerprints never contained values, so grouping is unchanged.
 
-### HTTP API and web page
+### Web UI and HTTP API
 
-The API is an optional extra, because a CLI user should not install a web framework:
+The web UI ships with the optional `api` extra:
 
 ```bash
 uv sync --extra api
 uv run assay serve --port 8000
 ```
 
-Open <http://127.0.0.1:8000> for the paste-in page, or call the endpoint directly:
+Open <http://127.0.0.1:8000>. The page accepts one JSON value or one per line, a schema
+and an optional rules YAML file. It runs the same pipeline as the CLI and renders the
+grouped report: summary counts, the fix that clears the most findings, one card per root
+cause with path, hint and samples, correlation notes, and a redaction toggle. The sample
+button loads a payload with several planted defects, and Ctrl+Enter runs the check. The
+report can be downloaded as JSON.
+
+The page calls `POST /assay/batch`, which takes `payloads`, `schema`, optional `rules` or
+`rules_yaml`, and `redact`. `POST /assay` still accepts a single payload:
 
 ```bash
 curl -s localhost:8000/assay -H 'content-type: application/json' -d '{
@@ -227,9 +237,8 @@ curl -s localhost:8000/assay -H 'content-type: application/json' -d '{
 }' | jq
 ```
 
-`POST /assay` accepts `payload`, `schema`, optional `rules` and `redact`, and returns the
-same `Report` object as `--format json`. `GET /health` returns the version. The service is
-stateless and writes nothing.
+`GET /health` returns the version. The service is stateless and writes nothing. Batches
+are capped at 2,000 payloads and 10 MB per request.
 
 ### Docker
 
@@ -476,7 +485,9 @@ src/assay/
   report.py      terminal table (Rich) and JSON
   formats.py     standalone HTML and SARIF 2.1.0
   redact.py      shape tokens and value scrubbing for --redact
-  api.py         FastAPI endpoint and paste-in page
+  api.py         FastAPI app: the web UI routes, batch endpoint and single-payload API
+  templates/     the HTML shell for the web UI
+  static/        the UI stylesheet and script, served from /static
   cli.py         Typer app and the exit-code contract
 ARCHITECTURE.md  the full design; unbuilt sections are marked planned
 NOTICE.md        attribution for the bundled GeoNames and Census data
